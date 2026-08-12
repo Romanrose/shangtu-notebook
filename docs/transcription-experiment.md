@@ -93,6 +93,8 @@ npm run bench:transcription
 
 输出文件包含 provider、样本数、轮数、warmup、期望文本和实际转写。该文件可能包含手写内容，必须保留在本机或受控实验目录，不要提交 Git。
 
+矩阵报告还会为每个 provider 输出 `summary`：`meanCharacterErrorRate`、`meanExactRate`、`meanCandidateHitRate`、`meanOkRate`、`meanP50Ms`、`meanP95Ms`、`sampleExactRate`、`sampleCandidateHitRate`、`totalRuns` 与 `statusCounts`。质量和延迟比率按样本平均，避免长句因为字符更多而在 provider 比较中占更大权重；`sampleExactRate` 与 `sampleCandidateHitRate` 分别表示有多少样本在最后一轮完全命中，或至少有一轮候选命中。`statusCounts` 用于单独识别超时、不可用和未配置，不应把失败样本当作识别错误计算 CER。
+
 ## 本地管线基线（2026-08-12）
 
 以下结果来自本机 CPU 服务和临时合成 PNG，仅用于确认管线、错误边界与延迟统计，**不代表真实手写识别准确率**：

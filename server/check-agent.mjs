@@ -7,7 +7,7 @@ import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
-import { benchmarkTranscription, characterErrorRate } from "./transcription-benchmark.mjs";
+import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -143,6 +143,8 @@ const qualityBenchmark = await benchmarkTranscription({
 });
 const qualityResult = qualityBenchmark[0];
 if (qualityResult.okRate !== 2 / 3 || qualityResult.exactRate !== 1 / 3 || qualityResult.candidateHitRate !== 2 / 3 || qualityResult.statusCounts.ready !== 2 || qualityResult.statusCounts.unavailable !== 1) throw new Error("转写基准没有记录可用率、候选命中率或状态计数。");
+const qualitySummary = summarizeTranscriptionBenchmark(qualityBenchmark);
+if (qualitySummary.samples !== 1 || qualitySummary.totalRuns !== 3 || qualitySummary.meanExactRate !== 1 / 3 || qualitySummary.meanCandidateHitRate !== 2 / 3 || qualitySummary.statusCounts.unavailable !== 1) throw new Error("转写基准汇总没有保留 provider 决策所需的质量和状态指标。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
