@@ -34,9 +34,16 @@
 
 ```json
 [
-  { "id": "writer-a-01", "expected": "李白写过《将进酒》吗？", "imagePath": "writer-a-01.png" }
+  {
+    "id": "writer-a-01",
+    "expected": "李白写过《将进酒》吗？",
+    "imagePath": "writer-a-01.png",
+    "metadata": { "writer": "writer-a", "inputMode": "stylus", "orientation": "portrait", "textType": "person-work" }
+  }
 ]
 ```
+
+`metadata` 只用于实验分层，值应使用匿名标签；当前保留 `writer`、`inputMode`、`orientation` 和 `textType`，每项最多 40 个字符。清单中的 PNG 必须位于清单目录内，避免实验脚本意外读取目录外文件。元数据会随逐样本报告透传，原始 PNG 仍只留在本机。
 
 然后在实验分支的服务端运行：
 

@@ -145,6 +145,12 @@ const qualityResult = qualityBenchmark[0];
 if (qualityResult.okRate !== 2 / 3 || qualityResult.exactRate !== 1 / 3 || qualityResult.candidateHitRate !== 2 / 3 || qualityResult.statusCounts.ready !== 2 || qualityResult.statusCounts.unavailable !== 1) throw new Error("转写基准没有记录可用率、候选命中率或状态计数。");
 const qualitySummary = summarizeTranscriptionBenchmark(qualityBenchmark);
 if (qualitySummary.samples !== 1 || qualitySummary.totalRuns !== 3 || qualitySummary.meanExactRate !== 1 / 3 || qualitySummary.meanCandidateHitRate !== 2 / 3 || qualitySummary.statusCounts.unavailable !== 1) throw new Error("转写基准汇总没有保留 provider 决策所需的质量和状态指标。");
+const metadataBenchmark = await benchmarkTranscription({
+  cases: [{ id: "metadata", expected: "李白", metadata: { writer: "writer-a", inputMode: "stylus", orientation: "portrait", textType: "person" }, image: tinyInk }],
+  runs: 1,
+  transcribe: async () => ({ status: "ok", providerStatus: "ready", transcription: { text: "李白", candidates: [] } }),
+});
+if (metadataBenchmark[0].metadata?.inputMode !== "stylus" || metadataBenchmark[0].metadata?.orientation !== "portrait") throw new Error("样本分层元数据没有透传到基准报告。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
