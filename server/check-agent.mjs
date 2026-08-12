@@ -213,6 +213,7 @@ try { compareTranscriptionReports([{ ...comparisonFixture, evidence: "unknown" }
 const unconfirmedComparison = compareTranscriptionReports([{ ...comparisonFixture, consent: undefined }]);
 if (unconfirmedComparison.providers.some((entry) => entry.rankable) || unconfirmedComparison.decision.recommendedProvider !== null) throw new Error("未确认授权的报告错误地进入 provider 排名。");
 try { compareTranscriptionReports([{ ...comparisonFixture, reports: [{ ...comparisonFixture.reports[0], samples: 3, results: [{ id: "a" }, { id: "b" }, { id: "c" }] }, comparisonFixture.reports[1]] }]); throw new Error("比较器接受了不同 cohort。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("相同")) throw error; }
+try { compareTranscriptionReports([{ ...comparisonFixture, reports: [{ ...comparisonFixture.reports[0], results: [{ id: "a" }, { id: "c" }] }, comparisonFixture.reports[1]] }]); throw new Error("比较器接受了不同样本 id 集合。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("样本 id")) throw error; }
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({

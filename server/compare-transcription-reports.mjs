@@ -18,6 +18,8 @@ function validateReport(report) {
     }
     const summary = entry.summary;
     if (!finite(summary.meanOkRate) || !summary.statusCounts || typeof summary.statusCounts !== "object") throw new Error("provider 报告缺少可用率或状态计数。");
+    const ids = entry.results.map((result) => result?.id);
+    if (ids.some((id) => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length) throw new Error("provider 报告 results 必须包含唯一样本 id。");
   }
   return report;
 }
@@ -37,6 +39,8 @@ function compareTranscriptionReports(reports, { evidence } = {}) {
   const consent = [...consentStates][0];
   const cohorts = new Set(validated.flatMap((report) => report.reports.map((entry) => `${entry.samples}:${entry.runs}:${entry.warmup}`)));
   if (cohorts.size !== 1) throw new Error("provider 报告必须使用相同 samples、runs 和 warmup，不能混合 cohort。");
+  const sampleSets = new Set(validated.flatMap((report) => report.reports.map((entry) => JSON.stringify(entry.results.map((result) => result.id)))));
+  if (sampleSets.size !== 1) throw new Error("provider 报告必须使用相同且顺序一致的样本 id，不能混合 cohort。");
   const entries = validated.flatMap((report) => report.reports.map((entry) => {
     const qualityAvailable = finite(entry.summary.meanCharacterErrorRate) && finite(entry.summary.sampleExactStableRate) && finite(entry.summary.sampleCandidateHitStableRate);
     return {
