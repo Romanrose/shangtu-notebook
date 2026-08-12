@@ -101,8 +101,9 @@ npm run bench:transcription
 - 合成数字墨迹“李白”，稳态 `warmup=1`、`runs=3`：实际结果为“杜日”，CER `1.0`，p50 约 `577 ms`，p95 约 `580 ms`。
 - 同一打印体中文句子、同一 macOS ARM64 CPU venv、同一 manifest 的真实矩阵（`warmup=1`、`runs=3`）：PaddleOCR CER `0.0909`、exact `false`、p50 约 `1391 ms`、p95 约 `1474 ms`；PaddleOCR-VL CER `0`、exact `true`、p50 约 `4504 ms`、p95 约 `5007 ms`。
 - 同一合成数字墨迹“李白”的真实矩阵（`warmup=1`、`runs=3`）：PaddleOCR 输出“杜日”，CER `1.0`、exact `false`、p50 约 `516 ms`、p95 约 `547 ms`；PaddleOCR-VL 输出“ネと ぐ”，CER `2.0`、exact `false`、p50 约 `3584 ms`、p95 约 `3586 ms`。
+- 6 条行楷合成套件（`warmup=1`、`runs=2`）：PaddleOCR 6/6 可用、0/6 exact、平均 CER `0.171`、平均 p50 约 `547 ms`、0 次超时；PaddleOCR-VL 3/6 exact、平均 CER `0.500`、平均 p50 约 `5975 ms`，12 次计数运行中有 5 次超时，候选命中覆盖 4/6 样本。
 
-这些矩阵仍只有临时打印体和合成数字墨迹各 1 条，不能作为真实手写或生产决策；它们只证明 VLM 不会自动优于 OCR。下一轮必须使用获得明确同意的真实手写样本，并在同一清单、同一轮数和同一服务端条件下比较，在此之前不选择任何 provider 作为最终生产方案。
+这些矩阵仍只有临时打印体、合成数字墨迹和行楷合成套件，不能作为真实手写或生产决策；它们证明 VLM 不会自动优于 OCR，并暴露了本机 CPU 下的超时风险。下一轮必须使用获得明确同意的真实手写样本，并在同一清单、同一轮数和同一服务端条件下比较，在此之前不选择任何 provider 作为最终生产方案。
 
 ## 运行合同夹具
 
