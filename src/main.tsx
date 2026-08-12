@@ -13,8 +13,8 @@ type InkImage = { data: string; mimeType: "image/png" };
 type InkBounds = { left: number; top: number; right: number; bottom: number };
 type TranscriptionProposal = { text: string; candidates: string[]; lines?: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> };
 type PendingTranscription = { text: string; initialText: string; candidates: string[]; image: InkImage; isFixture: boolean };
-type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
 type TranscriptionTiming = { event: "pen_up" | "local_awakening" | "transcription_request" | "transcription_result" | "transcription_confirmed"; elapsedMs: number; status?: string; providerStatus?: string; provider?: string; edited?: boolean };
+type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null; experimentSample: InkImage | null; experimentTimings: TranscriptionTiming[]; experimentSampleId: string | null };
 
 const INK_CAPTURE_PADDING = 18;
 const isTranscriptionExperiment = new URLSearchParams(window.location.search).get("experiment") === "transcription";
@@ -87,7 +87,7 @@ function Notebook() {
   const [systemNote, setSystemNote] = useState<string | null>(null);
   const [isCollected, setIsCollected] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
-  const [pages, setPages] = useState<PageRecord[]>([{ ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
+  const [pages, setPages] = useState<PageRecord[]>([{ ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null, experimentSample: null, experimentTimings: [], experimentSampleId: null }]);
   const [pageIndex, setPageIndex] = useState(0);
   const [experimentSample, setExperimentSample] = useState<InkImage | null>(null);
   const [experimentTimings, setExperimentTimings] = useState<TranscriptionTiming[]>([]);
@@ -102,7 +102,7 @@ function Notebook() {
 
   const rememberPage = () => {
     const ink = hasInkRef.current ? canvasRef.current?.toDataURL() ?? null : null;
-    setPages((current) => current.map((page, index) => index === pageIndex ? { ink, inkBounds: inkBoundsRef.current, outcome, isCollected, transcription: pendingTranscription } : page));
+    setPages((current) => current.map((page, index) => index === pageIndex ? { ink, inkBounds: inkBoundsRef.current, outcome, isCollected, transcription: pendingTranscription, experimentSample, experimentTimings, experimentSampleId } : page));
   };
 
   const restoreInk = (ink: string | null) => {
@@ -311,7 +311,7 @@ function Notebook() {
 
   const newPage = () => {
     rememberPage();
-    setPages((current) => [...current, { ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
+    setPages((current) => [...current, { ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null, experimentSample: null, experimentTimings: [], experimentSampleId: null }]);
     setPageIndex((current) => current + 1);
     restoreInk(null);
     hasInkRef.current = false;
@@ -338,9 +338,9 @@ function Notebook() {
     setHasInk(Boolean(next.ink));
     setOutcome(next.outcome);
     setPendingTranscription(next.transcription);
-    setExperimentSample(null);
-    setExperimentTimings([]);
-    setExperimentSampleId(null);
+    setExperimentSample(next.experimentSample);
+    setExperimentTimings(next.experimentTimings);
+    setExperimentSampleId(next.experimentSampleId);
     penUpAtRef.current = null;
     setSystemNote(null);
     setIsCollected(next.isCollected);

@@ -20,6 +20,8 @@
 
 同一实验路径还提供“下载时延 JSON”。每次书写会生成一个 12 位随机匿名 `sampleId`，同时写入 PNG 与 timing 文件名/JSON，便于在本机配对而不记录用户身份。文件内容只包含 `schema`、页码、`sampleId`，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`、`transcription_confirmed`；结果事件附带非敏感的 `status`/`providerStatus`/受控 `provider` 标签，确认事件只附带 `edited: true/false`。它不包含转写文本、PNG 内容、URL、endpoint、模型 ID、凭据或请求体，可将同一笔迹的“停笔 → 本地苏醒”“停笔 → 服务端结果”“停笔 → 用户确认”按 provider 分开比较。静读模式与默认 URL 不生成该记录。
 
+实验导出状态会随纸页记录保存；新建页面或翻页回看不会丢失原页的 sampleId、PNG 和 timing 下载入口。重新开始在该页书写时，才会为新的笔迹生成新的匿名样本。
+
 多次实验后可在本机将这些 JSON 汇总；汇总器只保留样本数、匿名 `sampleId` 覆盖率与唯一 ID 集合、事件计数、p50/p95、结果可用率以及按 provider/status 的分组，不输出输入文件名或任何笔迹内容：
 
 ```bash
