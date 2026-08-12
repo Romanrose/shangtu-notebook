@@ -49,15 +49,16 @@ export async function runTranscriptionProvider({ invoke, timeoutMs = TRANSCRIPTI
  * It deliberately accepts an opaque PNG and never exposes provider settings
  * or credentials to the browser.
  */
-export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE, invokeProvider, fetchImpl }) {
+export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE, endpoint = process.env.PADDLEOCR_ENDPOINT, invokeProvider, fetchImpl }) {
   if (!decodeDataUrl(image)) return { status: "invalid_ink", providerStatus: "rejected" };
   if (fixtureMode === true || fixtureMode === "1") {
     return { status: "ok", transcription: createTranscription({ text: fixtureTranscription }), providerStatus: "fixture" };
   }
   if (!provider || !modelId) return { status: "vision_unconfigured", providerStatus: "unconfigured" };
+  if (provider === "paddleocr" && !endpoint) return { status: "vision_unconfigured", providerStatus: "unconfigured" };
   if (invokeProvider) return runTranscriptionProvider({ invoke: ({ signal }) => invokeProvider({ image, signal }) });
-  if (provider === "paddleocr" && process.env.PADDLEOCR_ENDPOINT) {
-    return runTranscriptionProvider({ invoke: ({ signal }) => invokePaddleOcr({ image, signal, fetchImpl }) });
+  if (provider === "paddleocr" && endpoint) {
+    return runTranscriptionProvider({ invoke: ({ signal }) => invokePaddleOcr({ image, endpoint, signal, fetchImpl }) });
   }
   return {
     status: "provider_not_implemented",

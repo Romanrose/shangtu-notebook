@@ -28,6 +28,25 @@
 
 当前实验分支已增加 PaddleOCR 3.x 自托管 `/ocr` 响应解析器。它只在服务端同时配置 `VISION_MODEL_PROVIDER=paddleocr` 与 `PADDLEOCR_ENDPOINT` 时启用；请求体为裁剪 PNG 的 Base64 与 `fileType: 1`，并将 `rec_texts` / `rec_boxes` 映射到统一合同。未配置 endpoint 时不发请求，响应异常或超时沿用统一安全降级。
 
+真实 PaddleOCR 基准不使用仓库合同夹具。准备一个仅在本机保存的 JSON 清单（路径相对于清单文件）：
+
+```json
+[
+  { "id": "writer-a-01", "expected": "李白写过《将进酒》吗？", "imagePath": "writer-a-01.png" }
+]
+```
+
+然后在实验分支的服务端运行：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDER=paddleocr \
+PADDLEOCR_ENDPOINT=http://127.0.0.1:8080/ocr \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+npm run bench:transcription
+```
+
+PaddleOCR 官方自托管服务可用 `paddlex --serve --pipeline OCR` 启动；当前适配器对应其 `/ocr` JSON 请求和 `ocrResults[].prunedResult` 响应。样本、密钥和实验结果不进入 Git。
+
 ## 运行合同夹具
 
 ```bash
