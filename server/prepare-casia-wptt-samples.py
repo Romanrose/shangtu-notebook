@@ -181,6 +181,8 @@ def main() -> None:
                             "inputMode": "stylus-online",
                             "orientation": "landscape-line",
                             "textType": "text-line",
+                            "evidence": "public_casia",
+                            "cohortId": f"casia-olhwdb2.2-{args.page.lower()}-scale-{str(args.scale).replace('.', '_')}",
                         },
                     }
                 )
