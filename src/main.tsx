@@ -12,9 +12,9 @@ type InkState = "rest" | "awakening" | "reading" | "ready";
 type InkImage = { data: string; mimeType: "image/png" };
 type InkBounds = { left: number; top: number; right: number; bottom: number };
 type TranscriptionProposal = { text: string; candidates: string[]; lines?: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> };
-type PendingTranscription = { text: string; candidates: string[]; image: InkImage; isFixture: boolean };
+type PendingTranscription = { text: string; initialText: string; candidates: string[]; image: InkImage; isFixture: boolean };
 type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
-type TranscriptionTiming = { event: "pen_up" | "local_awakening" | "transcription_request" | "transcription_result"; elapsedMs: number; status?: string; providerStatus?: string };
+type TranscriptionTiming = { event: "pen_up" | "local_awakening" | "transcription_request" | "transcription_result" | "transcription_confirmed"; elapsedMs: number; status?: string; providerStatus?: string; edited?: boolean };
 
 const INK_CAPTURE_PADDING = 18;
 const isTranscriptionExperiment = new URLSearchParams(window.location.search).get("experiment") === "transcription";
@@ -93,9 +93,9 @@ function Notebook() {
   const [experimentTimings, setExperimentTimings] = useState<TranscriptionTiming[]>([]);
   const penUpAtRef = useRef<number | null>(null);
 
-  const recordTiming = (event: TranscriptionTiming["event"], status?: string, providerStatus?: string) => {
+  const recordTiming = (event: TranscriptionTiming["event"], status?: string, providerStatus?: string, edited?: boolean) => {
     if (!isTranscriptionExperiment || penUpAtRef.current === null) return;
-    const timing = { event, elapsedMs: Math.round(performance.now() - penUpAtRef.current), ...(status ? { status } : {}), ...(providerStatus ? { providerStatus } : {}) } satisfies TranscriptionTiming;
+    const timing = { event, elapsedMs: Math.round(performance.now() - penUpAtRef.current), ...(status ? { status } : {}), ...(providerStatus ? { providerStatus } : {}), ...(edited !== undefined ? { edited } : {}) } satisfies TranscriptionTiming;
     setExperimentTimings((current) => [...current, timing]);
   };
 
@@ -235,7 +235,7 @@ function Notebook() {
       const result = await postJson("/api/transcribe", { image });
       recordTiming("transcription_result", result.status, result.providerStatus);
       if (result.status === "ok" && result.transcription?.text) {
-        setPendingTranscription({ image, text: result.transcription.text, candidates: result.transcription.candidates ?? [], isFixture: result.providerStatus === "fixture" });
+        setPendingTranscription({ image, text: result.transcription.text, initialText: result.transcription.text, candidates: result.transcription.candidates ?? [], isFixture: result.providerStatus === "fixture" });
       } else {
         setSystemNote(unavailableMessage(result.status, "转写"));
       }
@@ -249,6 +249,7 @@ function Notebook() {
 
   const confirmTranscription = async () => {
     if (!pendingTranscription?.text.trim()) return;
+    recordTiming("transcription_confirmed", undefined, undefined, pendingTranscription.text !== pendingTranscription.initialText);
     setInkState("reading");
     setSystemNote(null);
     try {

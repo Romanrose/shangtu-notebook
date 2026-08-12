@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const EVENTS = new Set(["pen_up", "local_awakening", "transcription_request", "transcription_result"]);
+const EVENTS = new Set(["pen_up", "local_awakening", "transcription_request", "transcription_result", "transcription_confirmed"]);
 
 function percentile(values, ratio) {
   if (!values.length) return null;
@@ -22,7 +22,7 @@ function validateTimingPayload(payload) {
   }
   const seen = new Set();
   for (const timing of payload.timings) {
-    if (!timing || !EVENTS.has(timing.event) || seen.has(timing.event) || typeof timing.elapsedMs !== "number" || !Number.isFinite(timing.elapsedMs) || timing.elapsedMs < 0) {
+    if (!timing || !EVENTS.has(timing.event) || seen.has(timing.event) || typeof timing.elapsedMs !== "number" || !Number.isFinite(timing.elapsedMs) || timing.elapsedMs < 0 || (timing.event === "transcription_confirmed" && typeof timing.edited !== "boolean") || (timing.event !== "transcription_confirmed" && timing.edited !== undefined)) {
       throw new Error("时延事件必须是唯一、已知且非负毫秒数。");
     }
     seen.add(timing.event);
@@ -40,6 +40,8 @@ function summarizeTranscriptionTimings(payloads) {
       localAwakeningMs: byEvent.local_awakening?.elapsedMs ?? null,
       transcriptionRequestMs: byEvent.transcription_request?.elapsedMs ?? null,
       transcriptionResultMs: result?.elapsedMs ?? null,
+      confirmationMs: byEvent.transcription_confirmed?.elapsedMs ?? null,
+      edited: byEvent.transcription_confirmed?.edited ?? null,
       status: result?.status ?? "missing_result",
       providerStatus: result?.providerStatus ?? "missing_result",
     };
@@ -71,7 +73,10 @@ function summarizeTranscriptionTimings(payloads) {
     localAwakening: summarizeValues(durations("localAwakeningMs")),
     transcriptionRequest: summarizeValues(durations("transcriptionRequestMs")),
     transcriptionResult: summarizeValues(durations("transcriptionResultMs")),
+    confirmation: summarizeValues(durations("confirmationMs")),
     resultAvailableRate: trials.length ? durations("transcriptionResultMs").length / trials.length : null,
+    confirmationAvailableRate: trials.length ? durations("confirmationMs").length / trials.length : null,
+    editedConfirmationRate: trials.filter((trial) => typeof trial.edited === "boolean").length ? trials.filter((trial) => trial.edited === true).length / trials.filter((trial) => typeof trial.edited === "boolean").length : null,
     byProviderStatus: [...groups.values()].map(compactGroup),
   };
 }

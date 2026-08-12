@@ -18,7 +18,7 @@
 
 在实验分支可打开 `/?experiment=transcription` 进入采样辅助路径。写完并完成本地停笔反馈后，纸页边会提供“下载样本 PNG”，下载的是与 `/api/transcribe` 相同的当前笔迹裁剪图；默认 URL 不显示该入口，也不会上传额外数据或保存服务端副本。下载后的 PNG 需由实验者在本机目录中按上面的 manifest 格式补充人工校对文本和匿名元数据。
 
-同一实验路径还提供“下载时延 JSON”。它只包含 `schema`、页码，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`，后者附带非敏感的 `status`/`providerStatus`。它不包含转写文本、PNG、URL、凭据或请求体，可将同一笔迹在不同 provider 下的“停笔 → 本地苏醒”和“停笔 → 服务端结果”分开比较。静读模式与默认 URL 不生成该记录。
+同一实验路径还提供“下载时延 JSON”。它只包含 `schema`、页码，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`、`transcription_confirmed`；结果事件附带非敏感的 `status`/`providerStatus`，确认事件只附带 `edited: true/false`。它不包含转写文本、PNG、URL、凭据或请求体，可将同一笔迹的“停笔 → 本地苏醒”“停笔 → 服务端结果”“停笔 → 用户确认”分开比较。静读模式与默认 URL 不生成该记录。
 
 多次实验后可在本机将这些 JSON 汇总；汇总器只保留样本数、事件计数、p50/p95、结果可用率以及按 `providerStatus/status` 的分组，不输出输入文件名或任何笔迹内容：
 
@@ -29,7 +29,7 @@ npm run summarize:transcription-timing -- \
   --output /absolute/path/to/timing-summary.json
 ```
 
-缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 才是 provider 端到端返回时延。
+缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；没有点击确认的样本不会被计入确认率；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 是 provider 端到端返回时延；`confirmation` 和 `editedConfirmationRate` 分别衡量确认延迟与机器转写被用户改动的比例。候选按钮选择也算 `edited=true`，因为最终送入寻迹的文本已改变，但日志不保存改变前后的文本。
 
 也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
 
