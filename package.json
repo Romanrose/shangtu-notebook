@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "check:agent": "node server/check-agent.mjs"
+    "check:agent": "node server/check-agent.mjs",
+    "bench:transcription": "node server/bench-transcription.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",
