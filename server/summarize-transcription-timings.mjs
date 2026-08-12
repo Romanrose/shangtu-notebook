@@ -33,6 +33,9 @@ function validateTimingPayload(payload) {
 }
 
 function summarizeTranscriptionTimings(payloads) {
+  const sampleIds = payloads.map((payload) => payload.sampleId ?? null);
+  const presentSampleIds = sampleIds.filter(Boolean);
+  if (new Set(presentSampleIds).size !== presentSampleIds.length) throw new Error("时延输入包含重复 sampleId，不能重复计入同一实验。");
   const timingSets = payloads.map(validateTimingPayload);
   const trials = timingSets.map((timings) => {
     const byEvent = Object.fromEntries(timings.map((timing) => [timing.event, timing]));
@@ -77,6 +80,8 @@ function summarizeTranscriptionTimings(payloads) {
   return {
     schema: "shangtu-transcription-timing-summary-v1",
     trials: payloads.length,
+    sampleIdCoverage: payloads.length ? presentSampleIds.length / payloads.length : null,
+    sampleIds: presentSampleIds,
     eventCounts,
     localAwakening: summarizeValues(durations("localAwakeningMs")),
     transcriptionRequest: summarizeValues(durations("transcriptionRequestMs")),
