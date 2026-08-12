@@ -6,7 +6,7 @@ import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 import { benchmarkTranscription, characterErrorRate } from "./transcription-benchmark.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
-import { fixtureTranscription, transcribeInk } from "./transcription-adapter.mjs";
+import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
 const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,iVBORw0KGgo=" };
 
@@ -72,6 +72,14 @@ const invalidTranscription = await transcribeInk({ image: { mimeType: "image/jpe
 if (invalidTranscription.status !== "invalid_ink" || invalidTranscription.providerStatus !== "rejected") throw new Error("视觉适配器没有拒绝非 PNG 笔迹。");
 const fixtureTranscriptionResult = await transcribeInk({ image: tinyInk, fixtureMode: true });
 if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription?.text !== fixtureTranscription || fixtureTranscriptionResult.transcription?.candidates.length !== 0 || fixtureTranscriptionResult.providerStatus !== "fixture") throw new Error("演练转写没有被明确标记且保留固定文本。");
+const providerResult = await runTranscriptionProvider({ invoke: async () => ({ text: "李白是谁？", candidates: ["李白是哪位？"] }) });
+if (providerResult.status !== "ok" || providerResult.transcription?.candidates[0] !== "李白是哪位？" || providerResult.providerStatus !== "ready") throw new Error("受控转写服务没有收敛为合同结果。");
+const timedOutProvider = await runTranscriptionProvider({ invoke: () => new Promise(() => {}), timeoutMs: 1 });
+if (timedOutProvider.status !== "vision_timed_out" || timedOutProvider.providerStatus !== "timed_out") throw new Error("转写超时没有安全降级。");
+const unavailableProvider = await runTranscriptionProvider({ invoke: async () => { throw new Error("network unavailable"); } });
+if (unavailableProvider.status !== "vision_unavailable" || unavailableProvider.providerStatus !== "unavailable") throw new Error("转写不可用没有安全降级。");
+const delegatedProvider = await transcribeInk({ image: tinyInk, provider: "test", modelId: "test", invokeProvider: async () => ({ text: "李白是谁？" }) });
+if (delegatedProvider.status !== "ok" || delegatedProvider.transcription?.text !== "李白是谁？") throw new Error("已配置转写没有经过受控限时适配器。");
 const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
 if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
 if (characterErrorRate("李白", "李賀") !== 1 / 2 || characterErrorRate("", "李白") !== 1) throw new Error("中文字符错误率计算错误。");
