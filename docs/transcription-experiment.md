@@ -43,6 +43,8 @@ npm run compare:transcription -- \
 
 比较器要求所有报告使用相同的样本数、`runs` 和 `warmup`。`public_casia` 或 `unknown` 证据只输出“尚不足以选择生产 provider”；只有 `consented_user` 且质量字段完整时才允许排名，排序优先 CER，再看稳定 exact/候选命中，最后才看延迟。输出不包含逐条期望文本或实际转写。
 
+报告的 `evidence` 与 `cohortId` 从 manifest 每条样本的 `metadata` 派生；`TRANSCRIPTION_BENCH_EVIDENCE` 和 `TRANSCRIPTION_BENCH_COHORT_ID` 只能做一致性校验，不能给一份旧报告重新贴上用户样本标签。没有这些字段的历史报告按 `unknown` 处理。要进行 `consented_user` 排名，必须使用已完成人工校对的 manifest，并让每条样本声明同一个 `evidence: "consented_user"` 和 `cohortId`；未标注模式永远不能进入该分支。
+
 已用 CASIA 公开基线的 PaddleOCR 与 Tesseract 报告做过一次实际比较（10 样本、`runs=3`、`warmup=1`）：工具保留两者的 CER、可用率和延迟摘要，但决策结果为 `insufficient_evidence`、`recommendedProvider=null`。这证明公开基线能用于工程对照，却不会被误当成用户证据触发生产选型。
 
 也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
@@ -53,6 +55,8 @@ TRANSCRIPTION_MANIFEST_OUTPUT=/absolute/path/to/handwriting-samples/manifest.jso
 TRANSCRIPTION_SAMPLE_METADATA='{"writer":"writer-a","inputMode":"stylus","orientation":"portrait"}' \
 npm run prepare:transcription-manifest
 ```
+
+经明确同意的本机实验清单还应在 `TRANSCRIPTION_SAMPLE_METADATA` 中声明例如 `{"evidence":"consented_user","cohortId":"user-cohort-a"}`；这只是实验来源记录，不是上传凭据，也不会随代码提交。
 
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 

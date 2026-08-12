@@ -3,7 +3,7 @@ import { basename, extname, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 
-const ALLOWED_METADATA = ["writer", "inputMode", "orientation", "textType"];
+const ALLOWED_METADATA = ["writer", "inputMode", "orientation", "textType", "evidence", "cohortId"];
 
 export function createTranscriptionManifest({ files, expected, metadata = {} }) {
   if (!Array.isArray(files) || !Array.isArray(expected) || files.length !== expected.length || !files.length) throw new Error("样本文件和人工校对文本必须是一一对应的非空数组。");
