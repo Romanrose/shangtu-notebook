@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const EVENTS = new Set(["pen_up", "local_awakening", "transcription_request", "transcription_result", "transcription_confirmed"]);
+const PROVIDER_PATTERN = /^[A-Za-z0-9._-]{1,40}$/;
 
 function percentile(values, ratio) {
   if (!values.length) return null;
@@ -32,7 +33,8 @@ function validateTimingPayload(payload) {
   return payload.timings;
 }
 
-function summarizeTranscriptionTimings(payloads) {
+function summarizeTranscriptionTimings(payloads, { provider } = {}) {
+  if (provider !== undefined && (typeof provider !== "string" || !PROVIDER_PATTERN.test(provider))) throw new Error("汇总 provider 标签无效。");
   const sampleIds = payloads.map((payload) => payload.sampleId ?? null);
   const presentSampleIds = sampleIds.filter(Boolean);
   if (new Set(presentSampleIds).size !== presentSampleIds.length) throw new Error("时延输入包含重复 sampleId，不能重复计入同一实验。");
@@ -44,7 +46,7 @@ function summarizeTranscriptionTimings(payloads) {
       localAwakeningMs: byEvent.local_awakening?.elapsedMs ?? null,
       transcriptionRequestMs: byEvent.transcription_request?.elapsedMs ?? null,
       transcriptionResultMs: result?.elapsedMs ?? null,
-      provider: result?.provider ?? "unknown",
+      provider: result?.provider ?? provider ?? "unknown",
       confirmationMs: byEvent.transcription_confirmed?.elapsedMs ?? null,
       edited: byEvent.transcription_confirmed?.edited ?? null,
       status: result?.status ?? "missing_result",
@@ -79,6 +81,7 @@ function summarizeTranscriptionTimings(payloads) {
   const eventCounts = Object.fromEntries([...EVENTS].map((event) => [event, timingSets.filter((timings) => timings.some((timing) => timing.event === event)).length]));
   return {
     schema: "shangtu-transcription-timing-summary-v1",
+    ...(provider ? { provider } : {}),
     trials: payloads.length,
     sampleIdCoverage: payloads.length ? presentSampleIds.length / payloads.length : null,
     sampleIds: presentSampleIds,
@@ -97,21 +100,23 @@ function summarizeTranscriptionTimings(payloads) {
 function parseArgs(argv) {
   const inputs = [];
   let output;
+  let provider;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--input" && argv[index + 1]) inputs.push(argv[++index]);
     else if (argv[index] === "--output" && argv[index + 1]) output = argv[++index];
-    else throw new Error("用法：--input timing-a.json [--input timing-b.json] [--output summary.json]");
+    else if (argv[index] === "--provider" && argv[index + 1]) provider = argv[++index];
+    else throw new Error("用法：--input timing-a.json [--input timing-b.json] [--provider paddleocr] [--output summary.json]");
   }
   if (!inputs.length) throw new Error("至少需要一个 --input 时延 JSON。");
-  return { inputs, output };
+  return { inputs, output, provider };
 }
 
 export { summarizeTranscriptionTimings, validateTimingPayload };
 
 if (import.meta.main) {
-  const { inputs, output } = parseArgs(process.argv.slice(2));
+  const { inputs, output, provider } = parseArgs(process.argv.slice(2));
   const payloads = await Promise.all(inputs.map(async (input) => JSON.parse(await readFile(input, "utf8"))));
-  const summary = summarizeTranscriptionTimings(payloads);
+  const summary = summarizeTranscriptionTimings(payloads, { provider });
   const serialized = `${JSON.stringify(summary, null, 2)}\n`;
   if (output) await writeFile(output, serialized, "utf8");
   console.log(serialized.trim());
