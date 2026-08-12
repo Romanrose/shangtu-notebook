@@ -76,13 +76,12 @@ npm run prepare:transcription-manifest
 ```bash
 npm run preflight:transcription -- \
   --manifest /absolute/path/to/handwriting-samples/manifest.json \
-  --timing /absolute/path/to/handwriting-samples/timing-sample-01.json \
-  --timing /absolute/path/to/handwriting-samples/timing-sample-02.json \
+  --timing-dir /absolute/path/to/handwriting-samples/timings/ \
   --provider paddleocr \
   --output /tmp/shangtu-transcription-preflight.json
 ```
 
-最终实验要求 timing 文件按 manifest 的 sampleId 顺序传入；每个成功结果都必须带同一个 provider，且每个样本都应有用户确认。输出 `status=ready` 后，再把同一 manifest 交给 `bench:transcription`，并将 timing 汇总传给 `compare:transcription`；若输出 `needs_result_or_confirmation`，只能继续采集，不能据此做 provider 排名。
+`--timing-dir` 只读取实验者明确指定目录的顶层 JSON，并按 manifest 中的匿名 sampleId 自动配对，因此文件名排序不会影响结果；也可以继续重复传入 `--timing`，但那种模式同样要求集合完整。目录为空、混入非 JSON/子目录、重复或缺失 sampleId 都会在模型比较前失败。每个成功结果都必须带同一个 provider，且每个样本都应有用户确认。输出 `status=ready` 后，再把同一 manifest 交给 `bench:transcription`，并将 timing 汇总传给 `compare:transcription`；若输出 `needs_result_or_confirmation`，只能继续采集，不能据此做 provider 排名。
 
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 
