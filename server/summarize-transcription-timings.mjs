@@ -20,6 +20,7 @@ function validateTimingPayload(payload) {
   if (!payload || payload.schema !== "shangtu-transcription-timing-v1" || !Array.isArray(payload.timings) || !payload.timings.length) {
     throw new Error("时延文件必须是 shangtu-transcription-timing-v1 且包含 timings。");
   }
+  if (payload.sampleId !== undefined && (typeof payload.sampleId !== "string" || !/^[A-Za-z0-9]{12}$/.test(payload.sampleId))) throw new Error("时延文件 sampleId 必须是 12 位匿名标识。");
   const seen = new Set();
   for (const timing of payload.timings) {
     if (!timing || !EVENTS.has(timing.event) || seen.has(timing.event) || typeof timing.elapsedMs !== "number" || !Number.isFinite(timing.elapsedMs) || timing.elapsedMs < 0 || (timing.event === "transcription_confirmed" && typeof timing.edited !== "boolean") || (timing.event !== "transcription_confirmed" && timing.edited !== undefined) || (timing.provider !== undefined && (timing.event !== "transcription_result" || typeof timing.provider !== "string" || !/^[A-Za-z0-9._-]{1,40}$/.test(timing.provider)))) {

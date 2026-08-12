@@ -18,7 +18,7 @@
 
 在实验分支可打开 `/?experiment=transcription` 进入采样辅助路径。写完并完成本地停笔反馈后，纸页边会提供“下载样本 PNG”，下载的是与 `/api/transcribe` 相同的当前笔迹裁剪图；默认 URL 不显示该入口，也不会上传额外数据或保存服务端副本。下载后的 PNG 需由实验者在本机目录中按上面的 manifest 格式补充人工校对文本和匿名元数据。
 
-同一实验路径还提供“下载时延 JSON”。它只包含 `schema`、页码，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`、`transcription_confirmed`；结果事件附带非敏感的 `status`/`providerStatus`/受控 `provider` 标签，确认事件只附带 `edited: true/false`。它不包含转写文本、PNG、URL、endpoint、模型 ID、凭据或请求体，可将同一笔迹的“停笔 → 本地苏醒”“停笔 → 服务端结果”“停笔 → 用户确认”按 provider 分开比较。静读模式与默认 URL 不生成该记录。
+同一实验路径还提供“下载时延 JSON”。每次书写会生成一个 12 位随机匿名 `sampleId`，同时写入 PNG 与 timing 文件名/JSON，便于在本机配对而不记录用户身份。文件内容只包含 `schema`、页码、`sampleId`，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`、`transcription_confirmed`；结果事件附带非敏感的 `status`/`providerStatus`/受控 `provider` 标签，确认事件只附带 `edited: true/false`。它不包含转写文本、PNG 内容、URL、endpoint、模型 ID、凭据或请求体，可将同一笔迹的“停笔 → 本地苏醒”“停笔 → 服务端结果”“停笔 → 用户确认”按 provider 分开比较。静读模式与默认 URL 不生成该记录。
 
 多次实验后可在本机将这些 JSON 汇总；汇总器只保留样本数、事件计数、p50/p95、结果可用率以及按 `providerStatus/status` 的分组，不输出输入文件名或任何笔迹内容：
 
@@ -282,6 +282,8 @@ PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；�
 ### PaddleOCR 前端接入 smoke（2026-08-13）
 
 在隔离 Vite 端口仅由服务端配置 `VISION_MODEL_PROVIDER=paddleocr` 和本机 `PADDLEOCR_ENDPOINT`，浏览器模拟笔划后实际收到 PaddleOCR 返回的 `+米`，页面显示“机器转写，请在纸页边确认”；点击确认后，因 Pi 未配置而显示“转写已确认；寻迹内核尚未配置，因此没有生成旁批”。该运行证明真实 provider 结果仍需用户确认，Pi 不可用时不会伪造旁批，原始笔迹继续保留；`+米` 来自合成笔划，不能作为质量指标。浏览器未接触 endpoint、模型配置或凭据，输入和结果均未提交仓库。
+
+同一隔离端口 smoke 还确认实验页在停笔后显示一个 12 位匿名 `sampleId`，并同时显示样本 PNG 与 timing JSON 两个导出入口；两个导出文件名及 timing JSON 共用该 ID。此前已运行的旧实验页面可能被开发 service worker 缓存，验证新版本时应改用新隔离端口或清除本地开发缓存；这不影响生产默认入口。
 
 ### 输入缩放敏感性（2026-08-13）
 
