@@ -247,6 +247,18 @@ PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；�
 
 比较报告保留了 `public_casia` 和 cohort ID，并输出 `insufficient_evidence`、`recommendedProvider=null`；这验证了真实公开报告可以进入同一比较器，同时不会越过用户样本证据门槛。报告保留在本机 `/tmp/shangtu-casia-public-provenance-*.json`，未提交仓库。
 
+### 三 provider 同条件矩阵（2026-08-13）
+
+为观察质量与速度的实际 trade-off，又在同一 `casia-olhwdb2.2-p14-scale-1_5` cohort 上让三个 provider 各运行 1 次（`warmup=0`，共 10 条公开行）：
+
+| Provider | 可用率 | CER | exact / 候选命中 | p50 / p95 |
+| --- | ---: | ---: | ---: | ---: |
+| PaddleOCR | 10/10 | 0.3265 | 0/10 / 0/10 | 465.8 / 465.8 ms |
+| PaddleOCR-VL | 10/10 | 0.0810 | 0/10 / 0/10 | 4014.4 / 4014.4 ms |
+| Tesseract | 9/10 | 0.8895 | 0/10 / 0/10 | 94.1 / 94.1 ms |
+
+这组数据仅说明当前 CPU 自托管环境下的工程取舍：PaddleOCR-VL 字符级接近度最好但明显更慢，Tesseract 最快但质量和可用率不足，PaddleOCR 位于两者之间。比较器仍输出 `public_casia / insufficient_evidence / recommendedProvider=null`；下一步必须用获得明确同意的平板真实笔迹复核，并同时观察用户修改率与“停笔至可编辑转写”时延。矩阵报告保留在本机 `/tmp/shangtu-casia-public-provenance-matrix-1x-20260813.json`，未提交仓库。
+
 ### 输入缩放敏感性（2026-08-13）
 
 在同一台机器、同一 10 条公开行、同一 PaddleOCR 服务和 `warmup=1`、`runs=3` 条件下，仅改变导入器的 `--scale`：
