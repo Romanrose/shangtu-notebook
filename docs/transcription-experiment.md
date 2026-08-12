@@ -39,6 +39,8 @@ npm run summarize:transcription-timing -- \
 
 比较器还会校验 timing summary 顶层 `provider` 与其中每个 provider 分组一致；不能通过修改摘要标签把一个 provider 的确认率借给另一个 provider。
 
+每份 benchmark 输入也只能包含一次同名 provider；重复的 provider 报告会被拒绝，避免在矩阵比较中重复计算样本权重。
+
 为避免把成功结果错误归入未知 provider，timing schema 要求 `status=ok` 的 `transcription_result` 必须带受控 `provider` 标签；失败、超时或未配置结果可以没有 provider，并会进入 `unknown`/失败分组。
 
 多份 provider benchmark 报告可以进一步做 cohort 校验和决策摘要：

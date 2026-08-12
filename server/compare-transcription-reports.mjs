@@ -27,6 +27,8 @@ function validateReport(report) {
   if (report.consent !== undefined && report.consent !== "confirmed") throw new Error("benchmark 报告 consent 必须是 confirmed。");
   if (report.preprocessing !== undefined && (typeof report.preprocessing !== "string" || !PREPROCESSING_PATTERN.test(report.preprocessing))) throw new Error("benchmark 报告 preprocessing 无效。");
   if (report.runId !== undefined && (typeof report.runId !== "string" || !PREPROCESSING_PATTERN.test(report.runId))) throw new Error("benchmark 报告 runId 无效。");
+  const providers = report.reports.map((entry) => entry?.provider);
+  if (new Set(providers).size !== providers.length) throw new Error("benchmark 报告不能重复包含同一个 provider。");
   for (const entry of report.reports) {
     if (!PROVIDERS.has(entry.provider) || !Number.isInteger(entry.samples) || entry.samples < 1 || !Number.isInteger(entry.runs) || entry.runs < 1 || !Number.isInteger(entry.warmup) || entry.warmup < 0 || !entry.summary || !Array.isArray(entry.results) || entry.results.length !== entry.samples) {
       throw new Error("provider 报告缺少有效 provider、cohort 或 results。");
