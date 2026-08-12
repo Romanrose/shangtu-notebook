@@ -223,6 +223,7 @@ const matchingTiming = { ...consentedTiming, sampleIds: ["a", "b"].map((id) => i
 const timedComparisonFixture = { ...comparisonFixture, reports: comparisonFixture.reports.map((entry) => ({ ...entry, results: entry.results.map((result, index) => ({ ...result, id: ["a", "b"][index].repeat(12) })) })) };
 const timedComparison = compareTranscriptionReports([timedComparisonFixture], { evidence: "consented_user", timingSummaries: [{ ...matchingTiming, sampleIds: ["a", "b"].map((id) => id.repeat(12)) }] });
 if (timedComparison.providers[0].confirmationAvailableRate !== 1 || timedComparison.providers[0].editedConfirmationRate !== 0.5) throw new Error("timing summary 没有与 provider 质量报告合并。");
+try { compareTranscriptionReports([{ ...comparisonFixture, preprocessing: "scale-1_5" }, { ...comparisonFixture, preprocessing: "scale-3" }]); throw new Error("比较器接受了不同 preprocessing。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("preprocessing")) throw error; }
 try { compareTranscriptionReports([{ ...comparisonFixture, evidence: "unknown" }], { evidence: "consented_user" }); throw new Error("比较器允许把未知报告重标成用户样本。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("不一致")) throw error; }
 const unconfirmedComparison = compareTranscriptionReports([{ ...comparisonFixture, consent: undefined }]);
 if (unconfirmedComparison.providers.some((entry) => entry.rankable) || unconfirmedComparison.decision.recommendedProvider !== null) throw new Error("未确认授权的报告错误地进入 provider 排名。");

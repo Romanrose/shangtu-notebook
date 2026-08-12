@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const PROVIDERS = new Set(["fixture", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"]);
 const EVIDENCE_VALUES = new Set(["unknown", "public_casia", "consented_user"]);
+const PREPROCESSING_PATTERN = /^[A-Za-z0-9._-]{1,80}$/;
 
 function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -22,6 +23,7 @@ function validateReport(report) {
   if (report.evidence !== undefined && !EVIDENCE_VALUES.has(report.evidence)) throw new Error("benchmark 报告 evidence 无效。");
   if (report.cohortId !== undefined && (typeof report.cohortId !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(report.cohortId))) throw new Error("benchmark 报告 cohortId 无效。");
   if (report.consent !== undefined && report.consent !== "confirmed") throw new Error("benchmark 报告 consent 必须是 confirmed。");
+  if (report.preprocessing !== undefined && (typeof report.preprocessing !== "string" || !PREPROCESSING_PATTERN.test(report.preprocessing))) throw new Error("benchmark 报告 preprocessing 无效。");
   for (const entry of report.reports) {
     if (!PROVIDERS.has(entry.provider) || !Number.isInteger(entry.samples) || entry.samples < 1 || !Number.isInteger(entry.runs) || entry.runs < 1 || !Number.isInteger(entry.warmup) || entry.warmup < 0 || !entry.summary || !Array.isArray(entry.results) || entry.results.length !== entry.samples) {
       throw new Error("provider 报告缺少有效 provider、cohort 或 results。");
@@ -44,6 +46,9 @@ function compareTranscriptionReports(reports, { evidence, timingSummaries = [] }
   const reportCohortIds = new Set(validated.map((report) => report.cohortId ?? null));
   if (reportCohortIds.size !== 1) throw new Error("provider 报告必须使用相同 cohortId，不能混合样本来源。");
   const cohortId = [...reportCohortIds][0];
+  const preprocessingValues = new Set(validated.map((report) => report.preprocessing ?? "unknown"));
+  if (preprocessingValues.size !== 1) throw new Error("provider 报告必须使用相同 preprocessing，不能混合输入预处理。");
+  const preprocessing = [...preprocessingValues][0];
   const consentStates = new Set(validated.map((report) => report.consent ?? null));
   if (consentStates.size !== 1) throw new Error("provider 报告必须使用相同 consent 状态，不能混合样本授权记录。");
   const consent = [...consentStates][0];
@@ -99,7 +104,7 @@ function compareTranscriptionReports(reports, { evidence, timingSummaries = [] }
   return {
     schema: "shangtu-transcription-comparison-v1",
     evidence: reportEvidence,
-    cohort: { samples: validated[0].reports[0].samples, runs: validated[0].reports[0].runs, warmup: validated[0].reports[0].warmup, ...(cohortId ? { id: cohortId } : {}) },
+    cohort: { samples: validated[0].reports[0].samples, runs: validated[0].reports[0].runs, warmup: validated[0].reports[0].warmup, preprocessing, ...(cohortId ? { id: cohortId } : {}) },
     ...(consent ? { consent } : {}),
     decision: ranked.length ? { status: "rankable", recommendedProvider: ranked[0].provider } : { status: "insufficient_evidence", recommendedProvider: null },
     providers: entries,
