@@ -94,7 +94,7 @@ function compareTranscriptionReports(reports, { evidence, timingSummaries = [] }
       runs: entry.runs,
       warmup: entry.warmup,
       evidence: reportEvidence,
-      rankable: reportEvidence === "consented_user" && consent === "confirmed" && qualityAvailable && (!timingSummaries.length || timing?.confirmationAvailableRate !== null && timing?.editedConfirmationRate !== null),
+      rankable: reportEvidence === "consented_user" && consent === "confirmed" && qualityAvailable && timingSummaries.length > 0 && timing?.confirmationAvailableRate !== null && timing?.editedConfirmationRate !== null,
       meanOkRate: entry.summary.meanOkRate,
       meanCharacterErrorRate: qualityAvailable ? entry.summary.meanCharacterErrorRate : null,
       sampleExactStableRate: qualityAvailable ? entry.summary.sampleExactStableRate : null,
