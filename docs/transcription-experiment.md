@@ -259,6 +259,10 @@ PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；�
 
 这组数据仅说明当前 CPU 自托管环境下的工程取舍：PaddleOCR-VL 字符级接近度最好但明显更慢，Tesseract 最快但质量和可用率不足，PaddleOCR 位于两者之间。比较器仍输出 `public_casia / insufficient_evidence / recommendedProvider=null`；下一步必须用获得明确同意的平板真实笔迹复核，并同时观察用户修改率与“停笔至可编辑转写”时延。矩阵报告保留在本机 `/tmp/shangtu-casia-public-provenance-matrix-1x-20260813.json`，未提交仓库。
 
+### 采样路径 UI smoke（2026-08-13）
+
+使用本地浏览器模拟两段短笔划验证边界：`/?experiment=transcription` 在书写并停笔后显示匿名实验导出旁批，可下载当前样本 PNG 和时延 JSON；默认 `/?demo=evidence` 不显示实验导出控件；切换到“静读”后继续书写并等待，不显示停笔反馈或转写旁批。此次运行未配置视觉 provider，因此实验页显示安全降级提示；笔划由浏览器 CUA 模拟，不代表华为平板触控笔/手指真机通过，也未将其样本或报告提交仓库。
+
 ### 输入缩放敏感性（2026-08-13）
 
 在同一台机器、同一 10 条公开行、同一 PaddleOCR 服务和 `warmup=1`、`runs=3` 条件下，仅改变导入器的 `--scale`：
