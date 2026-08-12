@@ -9,6 +9,7 @@ import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
 import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { createTranscriptionManifest } from "./prepare-transcription-manifest.mjs";
+import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -168,6 +169,12 @@ const unlabeledBenchmark = await benchmarkTranscription({
 });
 const unlabeledSummary = summarizeTranscriptionBenchmark(unlabeledBenchmark);
 if (unlabeledBenchmark[0].exact !== null || unlabeledBenchmark[0].characterErrorRate !== null || unlabeledBenchmark[0].exactRate !== null || unlabeledSummary.meanExactRate !== null || unlabeledSummary.sampleExactStableRate !== null || unlabeledSummary.meanOkRate !== 1) throw new Error("未标注基准没有只保留可用率和延迟，或错误计算了质量指标。");
+const timingSummary = summarizeTranscriptionTimings([
+  { schema: "shangtu-transcription-timing-v1", page: 1, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 281 }, { event: "transcription_request", elapsedMs: 762 }, { event: "transcription_result", elapsedMs: 910, status: "vision_unavailable", providerStatus: "unavailable" }] },
+  { schema: "shangtu-transcription-timing-v1", page: 2, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 279 }, { event: "transcription_request", elapsedMs: 760 }, { event: "transcription_result", elapsedMs: 8000, status: "vision_timed_out", providerStatus: "timed_out" }] },
+  { schema: "shangtu-transcription-timing-v1", page: 3, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 282 }] },
+]);
+if (timingSummary.trials !== 3 || timingSummary.localAwakening.p50Ms !== 281 || timingSummary.transcriptionResult.count !== 2 || timingSummary.resultAvailableRate !== 2 / 3 || timingSummary.byProviderStatus.length !== 3) throw new Error("时延汇总没有区分本地苏醒、服务结果和缺失终态。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({

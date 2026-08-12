@@ -20,6 +20,17 @@
 
 同一实验路径还提供“下载时延 JSON”。它只包含 `schema`、页码，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`，后者附带非敏感的 `status`/`providerStatus`。它不包含转写文本、PNG、URL、凭据或请求体，可将同一笔迹在不同 provider 下的“停笔 → 本地苏醒”和“停笔 → 服务端结果”分开比较。静读模式与默认 URL 不生成该记录。
 
+多次实验后可在本机将这些 JSON 汇总；汇总器只保留样本数、事件计数、p50/p95、结果可用率以及按 `providerStatus/status` 的分组，不输出输入文件名或任何笔迹内容：
+
+```bash
+npm run summarize:transcription-timing -- \
+  --input /absolute/path/to/timing-a.json \
+  --input /absolute/path/to/timing-b.json \
+  --output /absolute/path/to/timing-summary.json
+```
+
+缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 才是 provider 端到端返回时延。
+
 也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
 
 ```bash
