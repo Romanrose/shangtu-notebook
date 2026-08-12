@@ -21,10 +21,13 @@ export function validateTimingCoverage({ sampleFiles, timingFiles }) {
   const sampleIds = sampleFiles.map(sampleIdFromInkFile);
   if (sampleIds.some((id) => !id)) throw new Error("启用 timing 校验时，所有 PNG 都必须使用实验页导出的匿名文件名。");
   if (new Set(sampleIds).size !== sampleIds.length) throw new Error("导出的 PNG 包含重复 sampleId。");
-  const timingIds = timingFiles.map(sampleIdFromTimingFile);
+  const timingIds = timingFiles.map((file) => sampleIdFromTimingFile(typeof file === "string" ? file : file.name));
   if (timingIds.some((id) => !id)) throw new Error("timing 目录只能包含实验页导出的匿名 JSON 文件。");
   if (new Set(timingIds).size !== timingIds.length) throw new Error("timing 文件包含重复 sampleId。");
   if (timingIds.length !== sampleIds.length || sampleIds.some((sampleId) => !timingIds.includes(sampleId))) throw new Error("PNG 与 timing 文件必须按 sampleId 一一对应。");
+  timingFiles.forEach((file, index) => {
+    if (typeof file !== "string" && (typeof file.payload?.sampleId !== "string" || file.payload.sampleId !== timingIds[index])) throw new Error("timing 文件名与 JSON 内 sampleId 不一致。");
+  });
   return sampleIds;
 }
 
@@ -64,7 +67,7 @@ async function collectTimingFiles(directory) {
     const payload = JSON.parse(await readFile(resolve(directory, file), "utf8"));
     validateTimingPayload(payload);
   }));
-  return files;
+  return Promise.all(files.map(async (file) => ({ name: file, payload: JSON.parse(await readFile(resolve(directory, file), "utf8")) })));
 }
 
 async function main() {
@@ -75,7 +78,11 @@ async function main() {
   const files = await collectPngFiles(directory);
   if (!files.length) throw new Error("样本目录中没有 PNG 文件。");
   const timingDirectory = process.env.TRANSCRIPTION_TIMING_DIR ? resolve(process.env.TRANSCRIPTION_TIMING_DIR) : null;
-  if (timingDirectory) validateTimingCoverage({ sampleFiles: files, timingFiles: await collectTimingFiles(timingDirectory) });
+  if (timingDirectory) {
+    const timingFiles = await collectTimingFiles(timingDirectory);
+    timingFiles.forEach(({ payload }) => validateTimingPayload(payload));
+    validateTimingCoverage({ sampleFiles: files, timingFiles });
+  }
   const metadata = process.env.TRANSCRIPTION_SAMPLE_METADATA ? JSON.parse(process.env.TRANSCRIPTION_SAMPLE_METADATA) : {};
   const prompt = createInterface({ input: stdin, output: stdout });
   const expected = [];
