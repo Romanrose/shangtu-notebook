@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { extname, resolve } from "node:path";
 
 const EVENTS = new Set(["pen_up", "local_awakening", "transcription_request", "transcription_result", "transcription_confirmed"]);
 const PROVIDER_PATTERN = /^[A-Za-z0-9._-]{1,40}$/;
@@ -102,21 +103,27 @@ function parseArgs(argv) {
   const inputs = [];
   let output;
   let provider;
+  let inputDirectory;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--input" && argv[index + 1]) inputs.push(argv[++index]);
+    else if (argv[index] === "--input-dir" && argv[index + 1]) inputDirectory = argv[++index];
     else if (argv[index] === "--output" && argv[index + 1]) output = argv[++index];
     else if (argv[index] === "--provider" && argv[index + 1]) provider = argv[++index];
-    else throw new Error("用法：--input timing-a.json [--input timing-b.json] [--provider paddleocr] [--output summary.json]");
+    else throw new Error("用法：--input timing-a.json [--input timing-b.json] | --input-dir timing-directory [--provider paddleocr] [--output summary.json]");
   }
-  if (!inputs.length) throw new Error("至少需要一个 --input 时延 JSON。");
-  return { inputs, output, provider };
+  if ((!inputs.length && !inputDirectory) || (inputs.length && inputDirectory)) throw new Error("必须提供 --input 或 --input-dir（二选一）；不会读取默认目录。");
+  return { inputs, inputDirectory, output, provider };
 }
 
 export { summarizeTranscriptionTimings, validateTimingPayload };
 
 if (import.meta.main) {
-  const { inputs, output, provider } = parseArgs(process.argv.slice(2));
-  const payloads = await Promise.all(inputs.map(async (input) => JSON.parse(await readFile(input, "utf8"))));
+  const { inputs, inputDirectory, output, provider } = parseArgs(process.argv.slice(2));
+  const directoryEntries = inputDirectory ? await readdir(resolve(inputDirectory), { withFileTypes: true }) : [];
+  if (inputDirectory && directoryEntries.some((entry) => !entry.isFile() || extname(entry.name).toLowerCase() !== ".json")) throw new Error("timing 输入目录只接受顶层 JSON 文件，不接受其他文件或子目录。");
+  const inputPaths = inputDirectory ? directoryEntries.map((entry) => resolve(inputDirectory, entry.name)).sort() : inputs;
+  if (!inputPaths.length) throw new Error("timing 输入目录必须包含至少一个 JSON 文件。");
+  const payloads = await Promise.all(inputPaths.map(async (input) => JSON.parse(await readFile(input, "utf8"))));
   const summary = summarizeTranscriptionTimings(payloads, { provider });
   const serialized = `${JSON.stringify(summary, null, 2)}\n`;
   if (output) await writeFile(output, serialized, "utf8");
