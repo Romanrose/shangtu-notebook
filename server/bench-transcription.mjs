@@ -3,6 +3,7 @@ import { dirname, extname, resolve } from "node:path";
 import { benchmarkTranscription, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { transcriptionBenchmarkCases } from "./fixtures/transcription-benchmark.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
+import { validateConsentedUserCases } from "./transcription-manifest-contract.mjs";
 
 const EVIDENCE_VALUES = new Set(["unknown", "public_casia", "consented_user"]);
 const PREPROCESSING_PATTERN = /^[A-Za-z0-9._-]{1,80}$/;
@@ -55,7 +56,10 @@ const preprocessing = process.env.TRANSCRIPTION_BENCH_PREPROCESSING ?? "unknown"
 if (!PREPROCESSING_PATTERN.test(preprocessing)) throw new Error("TRANSCRIPTION_BENCH_PREPROCESSING 必须是 1–80 位安全标签。");
 const runId = process.env.TRANSCRIPTION_BENCH_RUN_ID ?? "unknown";
 if (!PREPROCESSING_PATTERN.test(runId)) throw new Error("TRANSCRIPTION_BENCH_RUN_ID 必须是 1–80 位安全标签。");
-if (evidence === "consented_user" && (!manifestPath || allowUnlabeled || manifestEvidence.size !== 1 || !cohortId || consent !== "confirmed")) throw new Error("consented_user 实验必须使用已标注 manifest，并在每条样本中声明 evidence、cohortId 和 consent=confirmed。");
+if (evidence === "consented_user") {
+  if (!manifestPath || allowUnlabeled || manifestEvidence.size !== 1 || !cohortId || consent !== "confirmed") throw new Error("consented_user 实验必须使用已标注 manifest，并在每条样本中声明 evidence、cohortId 和 consent=confirmed。");
+  validateConsentedUserCases(cases);
+}
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
 const warmup = Number(process.env.TRANSCRIPTION_BENCH_WARMUP ?? 0);
