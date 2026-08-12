@@ -165,12 +165,14 @@ npm run bench:transcription
 
 矩阵模式仍然只在服务端调用 provider；每个 provider 的报告单独打印，避免把不可用结果或合同夹具混入另一个 provider 的准确率。
 
-需要保存可复核的本地结果时，额外指定输出路径；它只写 JSON 报告，不复制 PNG：
+需要保存可复核的本地结果时，额外指定输出路径；它只写 JSON 报告，不复制 PNG。默认报告不写入逐条人工校对文本或 provider 实际转写，只保留匿名 ID、状态、质量和延迟摘要；若必须在本机调试文本，才显式设置 `TRANSCRIPTION_BENCH_SHOW_TEXT=1`：
 
 ```bash
 TRANSCRIPTION_BENCH_OUTPUT=/tmp/shangtu-transcription-report.json \
 npm run bench:transcription
 ```
+
+报告顶层 `textIncluded` 会记录是否启用了文本输出；未设置 `TRANSCRIPTION_BENCH_SHOW_TEXT=1` 时为 `false`。含文本的调试报告必须留在受控本机目录，不能提交 Git 或上传第三方服务。
 
 输出文件包含 provider、样本数、轮数、warmup、期望文本和实际转写。该文件可能包含手写内容，必须保留在本机或受控实验目录，不要提交 Git。
 
