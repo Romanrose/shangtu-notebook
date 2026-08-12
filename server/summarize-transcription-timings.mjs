@@ -42,6 +42,7 @@ function summarizeTranscriptionTimings(payloads, { provider } = {}) {
   const trials = timingSets.map((timings) => {
     const byEvent = Object.fromEntries(timings.map((timing) => [timing.event, timing]));
     const result = byEvent.transcription_result;
+    if (provider !== undefined && result?.provider !== undefined && result.provider !== provider) throw new Error("时延事件 provider 与汇总 provider 不一致。");
     return {
       localAwakeningMs: byEvent.local_awakening?.elapsedMs ?? null,
       transcriptionRequestMs: byEvent.transcription_request?.elapsedMs ?? null,
