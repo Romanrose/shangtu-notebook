@@ -52,7 +52,7 @@ npm run compare:transcription -- \
   --output /absolute/path/to/comparison.json
 ```
 
-比较器要求所有报告使用相同且顺序一致的样本 ID、样本数、`runs` 和 `warmup`。可重复传入 `--timing`，比较器会要求 timing summary 完整覆盖同一批 sampleId，并按 provider 合并确认可用率和修改率；提供 timing 时，缺少完整确认/修改信号的 provider 不进入排名。`public_casia` 或 `unknown` 证据只输出“尚不足以选择生产 provider”；只有 `consented_user` 且质量与 timing 字段完整时才允许排名，排序优先 CER，再看稳定 exact/候选命中、用户修改率，最后才看延迟。输出不包含逐条期望文本或实际转写。
+比较器要求所有报告使用相同且顺序一致的样本 ID、样本数、`runs` 和 `warmup`。传入 `--timing` 后，比较器会要求 timing summary 完整覆盖同一批 sampleId，并按 provider 合并确认可用率和修改率；缺少完整确认/修改信号的 provider 不进入排名。`public_casia` 或 `unknown` 证据只输出“尚不足以选择生产 provider”；`consented_user` 若没有 timing summary 也只输出 `insufficient_evidence`，只有质量、结果可用率、用户确认和修改率字段完整时才允许排名，排序优先 CER，再看稳定 exact/候选命中、用户修改率，最后才看延迟。输出不包含逐条期望文本或实际转写。
 
 报告的 `evidence`、`cohortId`、`consent`、脱敏 `preprocessing` 和 `runId` 从实验配置/manifest 派生；`TRANSCRIPTION_BENCH_EVIDENCE` 和 `TRANSCRIPTION_BENCH_COHORT_ID` 只能做一致性校验，不能给一份旧报告重新贴上用户样本标签。没有这些字段的历史报告按 `unknown` 处理。要进行 `consented_user` 排名，必须使用已完成人工校对的 manifest，并让每条样本声明同一个 `evidence: "consented_user"`、`cohortId` 和 `consent: "confirmed"`；未标注模式或未确认授权永远不能进入该分支。不同 `preprocessing` 标签（例如 `casia-scale-1_5` 与 `casia-scale-3`）或不同 `runId` 不能放入同一比较。
 

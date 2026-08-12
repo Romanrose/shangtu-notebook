@@ -244,7 +244,7 @@ const comparisonFixture = {
 const publicComparison = compareTranscriptionReports([{ ...comparisonFixture, evidence: "public_casia", cohortId: "casia-cohort-a" }], { evidence: "public_casia" });
 if (publicComparison.decision.status !== "insufficient_evidence" || publicComparison.providers.some((entry) => entry.rankable)) throw new Error("公开样本比较错误地开启了生产 provider 排名。");
 const consentedComparison = compareTranscriptionReports([comparisonFixture], { evidence: "consented_user" });
-if (consentedComparison.decision.recommendedProvider !== "paddleocr" || !consentedComparison.providers.every((entry) => entry.rankable)) throw new Error("同 cohort 用户样本比较没有按 CER 和稳定率选出候选。");
+if (consentedComparison.decision.status !== "insufficient_evidence" || consentedComparison.decision.recommendedProvider !== null || consentedComparison.providers.some((entry) => entry.rankable)) throw new Error("缺少用户确认 timing 时错误地开启了 provider 排名。");
 const consentedTiming = { schema: "shangtu-transcription-timing-summary-v1", trials: 2, sampleIdCoverage: 1, sampleIds: ["a".repeat(12), "b".repeat(12)], byProviderStatus: [{ provider: "paddleocr", providerStatus: "ready", status: "ok", trials: 2, confirmation: { count: 2, p50Ms: 100, p95Ms: 120 }, confirmationAvailableRate: 1, editedConfirmationRate: 0.5 }] };
 const timingFixture = { ...consentedTiming, sampleIds: ["a", "b"] };
 try { compareTranscriptionReports([comparisonFixture], { evidence: "consented_user", timingSummaries: [timingFixture] }); throw new Error("timing summary 接受了非 12 位或错位 sampleId。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("sampleId")) throw error; }
