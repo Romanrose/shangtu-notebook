@@ -23,6 +23,7 @@ async function loadCases(manifestPath, { allowUnlabeled = false } = {}) {
       return [key, value];
     }));
     if (metadata.evidence !== undefined && !EVIDENCE_VALUES.has(metadata.evidence)) throw new Error("实验样本 metadata.evidence 必须是 unknown、public_casia 或 consented_user。");
+    if (metadata.cohortId !== undefined && !/^[A-Za-z0-9._-]{1,80}$/.test(metadata.cohortId)) throw new Error("实验样本 metadata.cohortId 无效。");
     const data = (await readFile(imagePath)).toString("base64");
     return { id: sample.id, ...(sample.expected !== undefined ? { expected: sample.expected } : {}), ...(Object.keys(metadata).length ? { metadata } : {}), image: { mimeType: "image/png", data: `data:image/png;base64,${data}` } };
   }));

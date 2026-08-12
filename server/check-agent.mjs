@@ -177,6 +177,9 @@ const metadataBenchmark = await benchmarkTranscription({
 if (metadataBenchmark[0].metadata?.inputMode !== "stylus" || metadataBenchmark[0].metadata?.orientation !== "portrait") throw new Error("样本分层元数据没有透传到基准报告。");
 const preparedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { writer: "writer-a", inputMode: "stylus" } });
 if (preparedManifest[0].imagePath !== "sample-a.png" || preparedManifest[0].metadata?.inputMode !== "stylus") throw new Error("本地样本标注助手没有生成规范清单。");
+const preparedConsentedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } });
+if (preparedConsentedManifest[0].metadata?.evidence !== "consented_user" || preparedConsentedManifest[0].metadata?.consent !== "confirmed") throw new Error("本地样本标注助手没有保留授权来源元数据。");
+try { createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { evidence: "consented_user", cohortId: "user-cohort-a" } }); throw new Error("本地样本标注助手允许了未确认授权的清单。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("consent=confirmed")) throw error; }
 try { createTranscriptionManifest({ files: ["../outside.png"], expected: ["李白"] }); throw new Error("样本清单允许了目录外路径。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("顶层")) throw error; }
 const unlabeledBenchmark = await benchmarkTranscription({
   cases: [{ id: "unlabeled", image: tinyInk }],
