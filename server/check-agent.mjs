@@ -101,10 +101,11 @@ const benchmarkTicks = [0, 8, 10, 22, 30, 45];
 const benchmark = await benchmarkTranscription({
   cases: [{ id: "test", expected: "李白", image: tinyInk }],
   runs: 3,
+  warmup: 1,
   now: () => benchmarkTicks.shift(),
   transcribe: async () => ({ status: "ok", providerStatus: "test", transcription: { text: "李白", candidates: [] } }),
 });
-if (!benchmark[0].exact || benchmark[0].characterErrorRate !== 0 || benchmark[0].p50Ms !== 12 || benchmark[0].p95Ms !== 15) throw new Error("转写基准计时或报告合同错误。");
+if (!benchmark[0].exact || benchmark[0].characterErrorRate !== 0 || benchmark[0].warmup !== 1 || benchmark[0].p50Ms !== 12 || benchmark[0].p95Ms !== 15) throw new Error("转写基准计时或报告合同错误。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
