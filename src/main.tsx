@@ -12,7 +12,7 @@ type InkState = "rest" | "awakening" | "reading" | "ready";
 type InkImage = { data: string; mimeType: "image/png" };
 type InkBounds = { left: number; top: number; right: number; bottom: number };
 type TranscriptionProposal = { text: string; candidates: string[]; lines?: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> };
-type PendingTranscription = { text: string; image: InkImage; isFixture: boolean };
+type PendingTranscription = { text: string; candidates: string[]; image: InkImage; isFixture: boolean };
 type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
 
 const INK_CAPTURE_PADDING = 18;
@@ -187,7 +187,7 @@ function Notebook() {
     try {
       const result = await postJson("/api/transcribe", { image });
       if (result.status === "ok" && result.transcription?.text) {
-        setPendingTranscription({ image, text: result.transcription.text, isFixture: result.providerStatus === "fixture" });
+        setPendingTranscription({ image, text: result.transcription.text, candidates: result.transcription.candidates ?? [], isFixture: result.providerStatus === "fixture" });
       } else {
         setSystemNote(unavailableMessage(result.status, "转写"));
       }
@@ -298,7 +298,7 @@ function Notebook() {
       {outcome && !isCollected && <div className="relation-trail" aria-hidden="true"><i /><i /><i /></div>}
       <canvas ref={canvasRef} className="ink-canvas" onPointerDown={begin} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} />
       {(inkState === "awakening" || inkState === "reading") && <aside className="awakening" aria-live="polite"><span className="ink-orb" />{inkState === "awakening" ? "识字中" : "寻人地 · 核对出处"}</aside>}
-      {pendingTranscription && !outcome && <TranscriptionNote transcription={pendingTranscription} onChange={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onConfirm={confirmTranscription} />}
+      {pendingTranscription && !outcome && <TranscriptionNote transcription={pendingTranscription} onChange={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onChoose={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onConfirm={confirmTranscription} />}
       {systemNote && !outcome && <aside className="margin-note service-note"><span className="note-seal">记</span><p>{systemNote}</p></aside>}
       {outcome && <MarginNotes outcome={outcome} showTrace={showTrace} onTrace={() => setShowTrace((shown) => !shown)} />}
       {outcome && <button className="stamp" onClick={() => setIsCollected((value) => !value)} aria-label={isCollected ? "展开寻迹" : "收为页边印章"}>{isCollected ? "寻" : "收为印"}</button>}
@@ -318,9 +318,9 @@ function MarginNotes({ outcome, showTrace, onTrace }: { outcome: TraceOutcome; s
   return <aside className="margin-notes"><button className="margin-note evidence" onClick={onTrace}><span className="note-seal">据</span><p>{outcome.evidence}</p><small>转写：{outcome.transcription}</small><em>点按展开寻迹</em></button>{outcome.association && <div className="margin-note association"><span className="note-seal">联想</span><p>{outcome.association}</p></div>}{showTrace && <section className="trace-card"><strong>寻迹卡</strong><p>识别：{outcome.path.join(" → ")}；已核对夹具中的有界来源。</p><ol>{outcome.path.map((node) => <li key={node}>{node}</li>)}</ol>{outcome.source.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.label}</a>)}</section>}</aside>;
 }
 
-function TranscriptionNote({ transcription, onChange, onConfirm }: { transcription: PendingTranscription; onChange: (text: string) => void; onConfirm: () => void }) {
+function TranscriptionNote({ transcription, onChange, onChoose, onConfirm }: { transcription: PendingTranscription; onChange: (text: string) => void; onChoose: (text: string) => void; onConfirm: () => void }) {
   const label = transcription.isFixture ? "演练转写（未调用视觉模型），请在纸页边确认：" : "机器转写，请在纸页边确认：";
-  return <aside className="margin-note transcription-note"><span className="note-seal">识</span><p>{label}</p><div className="transcription-edit" contentEditable suppressContentEditableWarning role="textbox" aria-label="可编辑机器转写" onInput={(event) => onChange(event.currentTarget.textContent ?? "")}>{transcription.text}</div><button onClick={onConfirm}>以此寻迹</button></aside>;
+  return <aside className="margin-note transcription-note"><span className="note-seal">识</span><p>{label}</p><div className="transcription-edit" contentEditable suppressContentEditableWarning role="textbox" aria-label="可编辑机器转写" onInput={(event) => onChange(event.currentTarget.textContent ?? "")}>{transcription.text}</div>{transcription.candidates.length > 0 && <div className="candidate-row" aria-label="候选转写"><span>候选：</span>{transcription.candidates.map((candidate) => <button key={candidate} type="button" onClick={() => onChoose(candidate)}>{candidate}</button>)}</div>}<button onClick={onConfirm}>以此寻迹</button></aside>;
 }
 
 createRoot(document.getElementById("root")!).render(<Notebook />);
