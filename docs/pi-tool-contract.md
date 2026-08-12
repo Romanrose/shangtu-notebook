@@ -11,6 +11,8 @@ Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项�
 
 `/api/transcribe` 的成功响应固定为 `{ status: "ok", transcription, providerStatus }`。`transcription.text` 是待确认主文本，`candidates` 是至多三个不同的备选文本，`lines`（如服务商提供）只包含相对于裁剪 PNG 的 `0–1` 行框与行文本。`providerStatus` 只表达 `fixture`、`ready`、`unconfigured`、`not_implemented`、`rejected`、`unavailable` 或 `timed_out` 等非敏感运行状态；不得返回密钥、供应商请求详情或原始模型推理。真实服务调用必须经过服务端 8 秒限时包装，并接收 `AbortSignal`；超时返回 `vision_timed_out`，调用异常或无效结果返回 `vision_unavailable`。失败也必须返回明确状态，不能编造转写。
 
+实验分支可选的 `vlm-openai-compatible` provider 只在服务端读取 `VISION_VLM_ENDPOINT`、`VISION_VLM_API_KEY` 和 `VISION_MODEL_ID`，向兼容 Chat Completions 的视觉接口发送当前 PNG；密钥不会进入浏览器、日志或转写响应。模型结果只作为可编辑机器转写，不能直接触发寻迹或写入事实旁批。
+
 Pi 的文本输出只是提案，永远不能直接落页。服务端只接受 JSON 的 `evidence`、`clarification` 或 `evidence_gap` 分支：证据分支必须逐项匹配本次有界子图的 `sourceIds` 和 `path`，而事实正文由匹配到的图谱边确定性生成；任何 JSON、来源或路径不匹配均降级为证据缺口。模型补充仅作为 `association` 接收，并由服务端强制加上“联想：”；其中含年代、出处、馆藏、作者等事实性标记的文本会被丢弃。
 
 当前仓库包含只读 `李白 → 作者 → 将进酒` CNKGraph 子图夹具，仅用于离线演示与合同测试。夹具内置固定版本的公开文本来源，并对夹具外查询返回“证据缺口”；它不依赖旧项目目录。正式版本替换该检索器，但必须保持相同的来源和有界路径语义。

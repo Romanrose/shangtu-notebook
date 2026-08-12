@@ -4,6 +4,7 @@ import { createNotebookServer } from "./notebook-server.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
+import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { benchmarkTranscription, characterErrorRate } from "./transcription-benchmark.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
@@ -94,6 +95,17 @@ const paddleResult = await invokePaddleOcr({ image: tinyInk, endpoint: "http://p
 if (paddleResult?.text !== "李白是谁？" || paddleResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR 响应没有映射为转写合同。");
 const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", endpoint: "http://paddle.test/ocr", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
 if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
+const missingVlmCredentials = await transcribeInk({ image: tinyInk, provider: "vlm-openai-compatible", modelId: "vision-test", vlmEndpoint: "http://vlm.test/v1/chat/completions", vlmApiKey: "" });
+if (missingVlmCredentials.status !== "vision_unconfigured" || missingVlmCredentials.providerStatus !== "unconfigured") throw new Error("VLM 缺少服务端凭据时没有安全降级。");
+const vlmResponse = { choices: [{ message: { content: JSON.stringify({ text: "李白是谁？", candidates: ["李白是哪位？"] }) } }] };
+const vlmResult = await invokeOpenAiCompatibleVlm({ image: tinyInk, modelId: "vision-test", endpoint: "http://vlm.test/v1/chat/completions", apiKey: "secret-test", fetchImpl: async (url, options) => {
+  const body = JSON.parse(options.body);
+  if (url !== "http://vlm.test/v1/chat/completions" || options.method !== "POST" || options.headers.Authorization !== "Bearer secret-test" || body.model !== "vision-test" || body.messages?.[0]?.content?.[1]?.image_url?.url !== tinyInk.data) throw new Error("VLM 请求合同或服务端凭据边界错误。");
+  return { ok: true, json: async () => vlmResponse };
+} });
+if (vlmResult?.text !== "李白是谁？" || vlmResult.candidates?.[0] !== "李白是哪位？") throw new Error("VLM JSON 响应没有映射为转写合同。");
+const configuredVlm = await transcribeInk({ image: tinyInk, provider: "vlm-openai-compatible", modelId: "vision-test", vlmEndpoint: "http://vlm.test/v1/chat/completions", vlmApiKey: "secret-test", fetchImpl: async () => ({ ok: true, json: async () => vlmResponse }) });
+if (configuredVlm.status !== "ok" || configuredVlm.providerStatus !== "ready" || configuredVlm.transcription?.text !== "李白是谁？") throw new Error("VLM 没有经过统一转写适配器。");
 const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
 if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
 if (characterErrorRate("李白", "李賀") !== 1 / 2 || characterErrorRate("", "李白") !== 1) throw new Error("中文字符错误率计算错误。");
