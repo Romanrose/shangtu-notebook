@@ -155,6 +155,13 @@ if (metadataBenchmark[0].metadata?.inputMode !== "stylus" || metadataBenchmark[0
 const preparedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { writer: "writer-a", inputMode: "stylus" } });
 if (preparedManifest[0].imagePath !== "sample-a.png" || preparedManifest[0].metadata?.inputMode !== "stylus") throw new Error("本地样本标注助手没有生成规范清单。");
 try { createTranscriptionManifest({ files: ["../outside.png"], expected: ["李白"] }); throw new Error("样本清单允许了目录外路径。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("顶层")) throw error; }
+const unlabeledBenchmark = await benchmarkTranscription({
+  cases: [{ id: "unlabeled", image: tinyInk }],
+  runs: 2,
+  transcribe: async () => ({ status: "ok", providerStatus: "ready", transcription: { text: "未标注结果", candidates: [] } }),
+});
+const unlabeledSummary = summarizeTranscriptionBenchmark(unlabeledBenchmark);
+if (unlabeledBenchmark[0].exact !== null || unlabeledBenchmark[0].characterErrorRate !== null || unlabeledBenchmark[0].exactRate !== null || unlabeledSummary.meanExactRate !== null || unlabeledSummary.sampleExactStableRate !== null || unlabeledSummary.meanOkRate !== 1) throw new Error("未标注基准没有只保留可用率和延迟，或错误计算了质量指标。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
