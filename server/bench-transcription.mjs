@@ -18,7 +18,7 @@ async function loadCases(manifestPath, { allowUnlabeled = false } = {}) {
     const imagePath = resolve(dirname(manifestPath), sample.imagePath);
     if (imagePath !== manifestRoot && !imagePath.startsWith(`${manifestRoot}/`)) throw new Error("实验样本 imagePath 必须位于清单目录内。");
     if (sample.metadata !== undefined && (!sample.metadata || typeof sample.metadata !== "object" || Array.isArray(sample.metadata))) throw new Error("实验样本 metadata 必须是对象。");
-    const metadata = Object.fromEntries(Object.entries(sample.metadata ?? {}).filter(([key, value]) => ["writer", "inputMode", "orientation", "textType", "evidence", "cohortId"].includes(key)).map(([key, value]) => {
+    const metadata = Object.fromEntries(Object.entries(sample.metadata ?? {}).filter(([key, value]) => ["writer", "inputMode", "orientation", "textType", "evidence", "cohortId", "consent"].includes(key)).map(([key, value]) => {
       if (typeof value !== "string" || value.length > 40) throw new Error("实验样本 metadata 只能包含不超过 40 字符的字符串。");
       return [key, value];
     }));
@@ -37,16 +37,19 @@ const allowUnlabeled = process.env.TRANSCRIPTION_BENCHMARK_UNLABELED === "1";
 const cases = await loadCases(manifestPath, { allowUnlabeled });
 const manifestEvidence = new Set(cases.map((sample) => sample.metadata?.evidence).filter(Boolean));
 const manifestCohortIds = new Set(cases.map((sample) => sample.metadata?.cohortId).filter(Boolean));
+const manifestConsents = new Set(cases.map((sample) => sample.metadata?.consent).filter(Boolean));
 if (manifestEvidence.size > 1) throw new Error("实验清单不能混合不同 evidence。");
 if (manifestCohortIds.size > 1) throw new Error("实验清单不能混合不同 cohortId。");
+if (manifestConsents.size > 1) throw new Error("实验清单不能混合不同 consent 状态。");
 const requestedEvidence = process.env.TRANSCRIPTION_BENCH_EVIDENCE;
 if (requestedEvidence !== undefined && !EVIDENCE_VALUES.has(requestedEvidence)) throw new Error("TRANSCRIPTION_BENCH_EVIDENCE 必须是 unknown、public_casia 或 consented_user。");
 const evidence = requestedEvidence ?? [...manifestEvidence][0] ?? "unknown";
 if (manifestEvidence.size && evidence !== [...manifestEvidence][0]) throw new Error("TRANSCRIPTION_BENCH_EVIDENCE 与 manifest metadata.evidence 不一致。");
 const cohortId = [...manifestCohortIds][0] ?? null;
+const consent = [...manifestConsents][0] ?? null;
 const requestedCohortId = process.env.TRANSCRIPTION_BENCH_COHORT_ID;
 if (requestedCohortId !== undefined && (!/^[A-Za-z0-9._-]{1,80}$/.test(requestedCohortId) || requestedCohortId !== cohortId)) throw new Error("TRANSCRIPTION_BENCH_COHORT_ID 必须与 manifest metadata.cohortId 一致。");
-if (evidence === "consented_user" && (!manifestPath || allowUnlabeled || manifestEvidence.size !== 1 || !cohortId)) throw new Error("consented_user 实验必须使用已标注 manifest，并在每条样本中声明 evidence 与 cohortId。");
+if (evidence === "consented_user" && (!manifestPath || allowUnlabeled || manifestEvidence.size !== 1 || !cohortId || consent !== "confirmed")) throw new Error("consented_user 实验必须使用已标注 manifest，并在每条样本中声明 evidence、cohortId 和 consent=confirmed。");
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
 const warmup = Number(process.env.TRANSCRIPTION_BENCH_WARMUP ?? 0);
@@ -71,6 +74,6 @@ for (const candidate of providers) {
 }
 const outputPath = process.env.TRANSCRIPTION_BENCH_OUTPUT;
 if (outputPath) {
-  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, ...(cohortId ? { cohortId } : {}), reports }, null, 2)}\n`, "utf8");
+  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, ...(cohortId ? { cohortId } : {}), ...(consent ? { consent } : {}), reports }, null, 2)}\n`, "utf8");
   console.log(`Report written to: ${outputPath}`);
 }

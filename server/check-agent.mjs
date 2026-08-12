@@ -196,6 +196,7 @@ try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1"
 const comparisonFixture = {
   evidence: "consented_user",
   cohortId: "user-cohort-a",
+  consent: "confirmed",
   reports: [
     { provider: "paddleocr", samples: 2, runs: 3, warmup: 1, summary: { meanOkRate: 1, meanCharacterErrorRate: 0.3, sampleExactStableRate: 0.2, sampleCandidateHitStableRate: 0.4, meanP50Ms: 600, meanP95Ms: 700, statusCounts: { ready: 6 } }, results: [{ id: "a" }, { id: "b" }] },
     { provider: "tesseract", samples: 2, runs: 3, warmup: 1, summary: { meanOkRate: 0.9, meanCharacterErrorRate: 0.8, sampleExactStableRate: 0, sampleCandidateHitStableRate: 0, meanP50Ms: 100, meanP95Ms: 120, statusCounts: { ready: 5, unavailable: 1 } }, results: [{ id: "a" }, { id: "b" }] },
@@ -206,6 +207,8 @@ if (publicComparison.decision.status !== "insufficient_evidence" || publicCompar
 const consentedComparison = compareTranscriptionReports([comparisonFixture], { evidence: "consented_user" });
 if (consentedComparison.decision.recommendedProvider !== "paddleocr" || !consentedComparison.providers.every((entry) => entry.rankable)) throw new Error("同 cohort 用户样本比较没有按 CER 和稳定率选出候选。");
 try { compareTranscriptionReports([{ ...comparisonFixture, evidence: "unknown" }], { evidence: "consented_user" }); throw new Error("比较器允许把未知报告重标成用户样本。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("不一致")) throw error; }
+const unconfirmedComparison = compareTranscriptionReports([{ ...comparisonFixture, consent: undefined }]);
+if (unconfirmedComparison.providers.some((entry) => entry.rankable) || unconfirmedComparison.decision.recommendedProvider !== null) throw new Error("未确认授权的报告错误地进入 provider 排名。");
 try { compareTranscriptionReports([{ ...comparisonFixture, reports: [{ ...comparisonFixture.reports[0], samples: 3, results: [{ id: "a" }, { id: "b" }, { id: "c" }] }, comparisonFixture.reports[1]] }]); throw new Error("比较器接受了不同 cohort。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("相同")) throw error; }
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
