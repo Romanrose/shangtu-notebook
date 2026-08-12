@@ -22,7 +22,7 @@ function validateTimingPayload(payload) {
   }
   const seen = new Set();
   for (const timing of payload.timings) {
-    if (!timing || !EVENTS.has(timing.event) || seen.has(timing.event) || typeof timing.elapsedMs !== "number" || !Number.isFinite(timing.elapsedMs) || timing.elapsedMs < 0 || (timing.event === "transcription_confirmed" && typeof timing.edited !== "boolean") || (timing.event !== "transcription_confirmed" && timing.edited !== undefined)) {
+    if (!timing || !EVENTS.has(timing.event) || seen.has(timing.event) || typeof timing.elapsedMs !== "number" || !Number.isFinite(timing.elapsedMs) || timing.elapsedMs < 0 || (timing.event === "transcription_confirmed" && typeof timing.edited !== "boolean") || (timing.event !== "transcription_confirmed" && timing.edited !== undefined) || (timing.provider !== undefined && (timing.event !== "transcription_result" || typeof timing.provider !== "string" || !/^[A-Za-z0-9._-]{1,40}$/.test(timing.provider)))) {
       throw new Error("时延事件必须是唯一、已知且非负毫秒数。");
     }
     seen.add(timing.event);
@@ -40,6 +40,7 @@ function summarizeTranscriptionTimings(payloads) {
       localAwakeningMs: byEvent.local_awakening?.elapsedMs ?? null,
       transcriptionRequestMs: byEvent.transcription_request?.elapsedMs ?? null,
       transcriptionResultMs: result?.elapsedMs ?? null,
+      provider: result?.provider ?? "unknown",
       confirmationMs: byEvent.transcription_confirmed?.elapsedMs ?? null,
       edited: byEvent.transcription_confirmed?.edited ?? null,
       status: result?.status ?? "missing_result",
@@ -49,15 +50,16 @@ function summarizeTranscriptionTimings(payloads) {
   const durations = (key) => trials.map((trial) => trial[key]).filter((value) => typeof value === "number");
   const groups = new Map();
   for (const trial of trials) {
-    const key = `${trial.providerStatus}:${trial.status}`;
-    const group = groups.get(key) ?? { providerStatus: trial.providerStatus, status: trial.status, trials: 0, localAwakening: [], transcriptionRequest: [], transcriptionResult: [] };
+    const key = `${trial.provider}:${trial.providerStatus}:${trial.status}`;
+    const group = groups.get(key) ?? { provider: trial.provider, providerStatus: trial.providerStatus, status: trial.status, trials: 0, localAwakening: [], transcriptionRequest: [], transcriptionResult: [] };
     group.trials += 1;
     if (trial.localAwakeningMs !== null) group.localAwakening.push(trial.localAwakeningMs);
     if (trial.transcriptionRequestMs !== null) group.transcriptionRequest.push(trial.transcriptionRequestMs);
     if (trial.transcriptionResultMs !== null) group.transcriptionResult.push(trial.transcriptionResultMs);
     groups.set(key, group);
   }
-  const compactGroup = ({ providerStatus, status, trials: count, localAwakening, transcriptionRequest, transcriptionResult }) => ({
+  const compactGroup = ({ provider, providerStatus, status, trials: count, localAwakening, transcriptionRequest, transcriptionResult }) => ({
+    provider,
     providerStatus,
     status,
     trials: count,
