@@ -26,8 +26,7 @@
 
 ```bash
 npm run summarize:transcription-timing -- \
-  --input /absolute/path/to/timing-a.json \
-  --input /absolute/path/to/timing-b.json \
+  --input-dir /absolute/path/to/paddleocr-timings/ \
   --provider paddleocr \
   --output /absolute/path/to/timing-summary.json
 ```
@@ -35,6 +34,8 @@ npm run summarize:transcription-timing -- \
 缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；没有点击确认的样本不会被计入确认率；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 是 provider 端到端返回时延；`confirmation` 和 `editedConfirmationRate` 分别衡量确认延迟与机器转写被用户改动的比例。汇总结果的 `byProviderStatus` 会同时保留 `provider`、`providerStatus`、`status`、确认可用率和修改率，便于把修改率和可用率与同一 provider 对齐。候选按钮选择也算 `edited=true`，因为最终送入寻迹的文本已改变，但日志不保存改变前后的文本。
 
 同一 provider 的 timing 汇总应显式传入 `--provider`。这样没有 provider 标签的网络失败、超时或缺结果也会计入该 provider 的分母；成功结果仍必须携带自身 provider 标签，若与命令行标签不一致则拒绝汇总。不同 provider 必须分别生成 timing summary，再传给比较器。
+
+`--input-dir` 只读取实验者明确指定目录的顶层 JSON；目录为空、混入其他文件/子目录，或同时使用 `--input` 与 `--input-dir` 都会失败。旧的重复 `--input` 用法仍可用于少量文件。
 
 比较器还会校验 timing summary 顶层 `provider` 与其中每个 provider 分组一致；不能通过修改摘要标签把一个 provider 的确认率借给另一个 provider。
 
