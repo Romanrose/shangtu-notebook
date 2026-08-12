@@ -5,7 +5,7 @@
 ## 分阶段比较
 
 1. 图像 OCR / HTR：先比较一项自托管中文手写 OCR 与一项托管手写 OCR。它们直接复用当前 PNG 接口。
-2. VLM 复核：仅作为 OCR 低置信度或异常结果的候选补充，输出仍须经过 `createTranscription` 收敛，绝不能直接寻迹或写事实旁批。
+2. VLM 复核：当前实验分支提供 `vlm-openai-compatible` 适配器，适用于兼容 Chat Completions 的本地或托管视觉接口；输出仍须经过 `createTranscription` 收敛，绝不能直接寻迹或写事实旁批。
 3. 数字墨水：未来原生壳保留笔画坐标与时序后再单独评估；它不是当前纯 PWA 的替换实现。
 
 ## 样本与隐私
@@ -51,6 +51,22 @@ npm run bench:transcription
 PaddleOCR 官方自托管服务可用 `paddlex --serve --pipeline OCR` 启动；当前适配器对应其 `/ocr` JSON 请求和 `ocrResults[].prunedResult` 响应。样本、密钥和实验结果不进入 Git。
 
 `TRANSCRIPTION_BENCH_WARMUP=0` 用于观察冷启动影响；设置为 `1` 或更高会先调用但不计入统计，用于观察稳态。`TRANSCRIPTION_BENCH_SHOW_TEXT=1` 仅在本机终端显示期望文本和实际转写，默认关闭，避免实验日志意外泄露内容。
+
+VLM 对照实验只在服务端配置以下变量，`VISION_VLM_ENDPOINT` 应填写完整的 Chat Completions 地址（例如本地代理的 `/v1/chat/completions`），不要把 token 放进浏览器或样本清单：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDER=vlm-openai-compatible \
+VISION_MODEL_ID=<server-side-model-id> \
+VISION_VLM_ENDPOINT=http://127.0.0.1:8000/v1/chat/completions \
+VISION_VLM_API_KEY=<server-side-only-token> \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+TRANSCRIPTION_BENCH_RUNS=5 \
+TRANSCRIPTION_BENCH_WARMUP=1 \
+TRANSCRIPTION_BENCH_SHOW_TEXT=1 \
+npm run bench:transcription
+```
+
+适配器要求模型只返回 `{ "text": "...", "candidates": ["..."] }`；若模型返回普通文本，也只会作为待确认文本保留。它不使用模型输出的日期、来源或人物关系，因此不会扩大证据边界。
 
 ## 本地管线基线（2026-08-12）
 

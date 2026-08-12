@@ -20,8 +20,8 @@ async function loadCases(manifestPath) {
 
 const provider = process.env.TRANSCRIPTION_BENCH_PROVIDER ?? process.env.VISION_MODEL_PROVIDER ?? "fixture";
 const manifestPath = process.env.TRANSCRIPTION_BENCHMARK_MANIFEST;
-if (provider !== "fixture" && provider !== "paddleocr") throw new Error(`暂不支持实验 provider: ${provider}`);
-if (provider === "paddleocr" && !manifestPath) throw new Error("真实 PaddleOCR 实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。");
+if (!["fixture", "paddleocr", "vlm-openai-compatible"].includes(provider)) throw new Error(`暂不支持实验 provider: ${provider}`);
+if (provider !== "fixture" && !manifestPath) throw new Error(`真实 ${provider} 实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。`);
 const cases = await loadCases(manifestPath);
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
@@ -33,7 +33,7 @@ const report = await benchmarkTranscription({
   warmup,
   transcribe: ({ image }) => provider === "fixture"
     ? transcribeInk({ image, fixtureMode: true })
-    : transcribeInk({ image, provider, modelId: process.env.VISION_MODEL_ID ?? "PP-OCRv5" }),
+    : transcribeInk({ image, provider, modelId: process.env.VISION_MODEL_ID ?? (provider === "paddleocr" ? "PP-OCRv5" : undefined) }),
 });
 
 console.log(`Provider: ${provider}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
