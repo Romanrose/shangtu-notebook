@@ -60,6 +60,8 @@ npm run prepare:transcription-manifest
 
 经明确同意的本机实验清单还应在 `TRANSCRIPTION_SAMPLE_METADATA` 中声明例如 `{"evidence":"consented_user","cohortId":"user-cohort-a","consent":"confirmed"}`；这只是实验来源记录，不是上传凭据，也不会随代码提交。只有实验者已取得样本书写者明确同意，并确认样本可用于本次转写比较时，才允许填写 `confirmed`。
 
+运行 benchmark 时会再次逐条检查这些字段，而不是只检查清单中是否“出现过”授权值：每一条样本都必须有 `evidence=consented_user`、同一个有效 `cohortId`、`consent=confirmed` 和 1–240 字符人工校对文本。任意一条缺失或混入不同 cohort，都会在模型调用前失败，避免把部分授权清单误用于最终 provider 排名。
+
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 
 如果 PNG 来自实验页导出，标注助手会从严格格式 `shangtu-ink-{sampleId}-page-{page}-{timestamp}.png` 中保留 12 位匿名 `sampleId` 作为 manifest 的顶层 `id`；这样 benchmark 结果 ID 能与同名 timing JSON 配对。普通自定义文件名仍使用 `sample-01` 等顺序 ID；同一目录内重复导出 ID 会被拒绝。
