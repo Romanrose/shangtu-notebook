@@ -32,12 +32,25 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
   const report = [];
   for (const sample of cases) {
     const durations = [];
+    const statusCounts = {};
+    let okRuns = 0;
+    let exactRuns = 0;
+    let candidateHitRuns = 0;
     let result;
     for (let run = 0; run < warmup; run += 1) await transcribe({ image: sample.image });
     for (let run = 0; run < runs; run += 1) {
       const startedAt = now();
       result = await transcribe({ image: sample.image });
       durations.push(now() - startedAt);
+      const status = result?.providerStatus ?? "unknown";
+      statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+      const transcription = result?.status === "ok" ? result.transcription : null;
+      const actual = transcription?.text ?? "";
+      if (transcription) {
+        okRuns += 1;
+        if (actual === sample.expected) exactRuns += 1;
+        if ([actual, ...(transcription.candidates ?? [])].includes(sample.expected)) candidateHitRuns += 1;
+      }
     }
     const actual = result?.status === "ok" ? result.transcription?.text ?? "" : "";
     report.push({
@@ -47,6 +60,10 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
       exact: actual === sample.expected,
       characterErrorRate: characterErrorRate(sample.expected, actual),
       providerStatus: result?.providerStatus ?? "unknown",
+      okRate: okRuns / runs,
+      exactRate: exactRuns / runs,
+      candidateHitRate: candidateHitRuns / runs,
+      statusCounts,
       runs,
       warmup,
       p50Ms: percentile(durations, 0.5),

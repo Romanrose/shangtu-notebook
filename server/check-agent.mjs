@@ -118,6 +118,20 @@ const benchmark = await benchmarkTranscription({
   transcribe: async () => ({ status: "ok", providerStatus: "test", transcription: { text: "李白", candidates: [] } }),
 });
 if (!benchmark[0].exact || benchmark[0].characterErrorRate !== 0 || benchmark[0].warmup !== 1 || benchmark[0].p50Ms !== 12 || benchmark[0].p95Ms !== 15) throw new Error("转写基准计时或报告合同错误。");
+const qualityTicks = [0, 5, 5, 10, 10, 15];
+let qualityRun = 0;
+const qualityBenchmark = await benchmarkTranscription({
+  cases: [{ id: "quality", expected: "李白", image: tinyInk }],
+  runs: 3,
+  now: () => qualityTicks.shift(),
+  transcribe: async () => [
+    { status: "ok", providerStatus: "ready", transcription: { text: "李白?", candidates: ["李白"] } },
+    { status: "vision_unavailable", providerStatus: "unavailable" },
+    { status: "ok", providerStatus: "ready", transcription: { text: "李白", candidates: [] } },
+  ][qualityRun++],
+});
+const qualityResult = qualityBenchmark[0];
+if (qualityResult.okRate !== 2 / 3 || qualityResult.exactRate !== 1 / 3 || qualityResult.candidateHitRate !== 2 / 3 || qualityResult.statusCounts.ready !== 2 || qualityResult.statusCounts.unavailable !== 1) throw new Error("转写基准没有记录可用率、候选命中率或状态计数。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
