@@ -79,7 +79,7 @@ if (unconfiguredTranscription.status !== "vision_unconfigured" || unconfiguredTr
 const invalidTranscription = await transcribeInk({ image: { mimeType: "image/jpeg", data: "invalid" } });
 if (invalidTranscription.status !== "invalid_ink" || invalidTranscription.providerStatus !== "rejected") throw new Error("视觉适配器没有拒绝非 PNG 笔迹。");
 const fixtureTranscriptionResult = await transcribeInk({ image: tinyInk, fixtureMode: true });
-if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription?.text !== fixtureTranscription || fixtureTranscriptionResult.transcription?.candidates.length !== 0 || fixtureTranscriptionResult.providerStatus !== "fixture") throw new Error("演练转写没有被明确标记且保留固定文本。");
+if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription?.text !== fixtureTranscription || fixtureTranscriptionResult.transcription?.candidates.length !== 0 || fixtureTranscriptionResult.providerStatus !== "fixture" || fixtureTranscriptionResult.provider !== "fixture") throw new Error("演练转写没有被明确标记且保留固定文本。");
 const providerResult = await runTranscriptionProvider({ invoke: async () => ({ text: "李白是谁？", candidates: ["李白是哪位？"] }) });
 if (providerResult.status !== "ok" || providerResult.transcription?.candidates[0] !== "李白是哪位？" || providerResult.providerStatus !== "ready") throw new Error("受控转写服务没有收敛为合同结果。");
 const timedOutProvider = await runTranscriptionProvider({ invoke: () => new Promise(() => {}), timeoutMs: 1 });
@@ -100,7 +100,7 @@ const paddleResult = await invokePaddleOcr({ image: tinyInk, endpoint: "http://p
 } });
 if (paddleResult?.text !== "李白是谁？" || paddleResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR 响应没有映射为转写合同。");
 const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", endpoint: "http://paddle.test/ocr", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
-if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
+if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.provider !== "paddleocr" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
 const paddleVlResponse = { result: { dataInfo: { width: 100, height: 50 }, layoutParsingResults: [{ prunedResult: { parsing_res_list: [{ block_content: "李白是谁？", block_bbox: [10, 5, 90, 25] }] } }] } };
 const paddleVlResult = await invokePaddleOcrVl({ image: tinyInk, endpoint: "http://paddle-vl.test/layout-parsing", fetchImpl: async (url, options) => {
   if (url !== "http://paddle-vl.test/layout-parsing" || options.method !== "POST" || JSON.parse(options.body).fileType !== 1 || JSON.parse(options.body).visualize !== false) throw new Error("PaddleOCR-VL 请求合同错误。");
@@ -189,12 +189,13 @@ const unlabeledBenchmark = await benchmarkTranscription({
 const unlabeledSummary = summarizeTranscriptionBenchmark(unlabeledBenchmark);
 if (unlabeledBenchmark[0].exact !== null || unlabeledBenchmark[0].characterErrorRate !== null || unlabeledBenchmark[0].exactRate !== null || unlabeledSummary.meanExactRate !== null || unlabeledSummary.sampleExactStableRate !== null || unlabeledSummary.meanOkRate !== 1) throw new Error("未标注基准没有只保留可用率和延迟，或错误计算了质量指标。");
 const timingSummary = summarizeTranscriptionTimings([
-  { schema: "shangtu-transcription-timing-v1", page: 1, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 281 }, { event: "transcription_request", elapsedMs: 762 }, { event: "transcription_result", elapsedMs: 910, status: "vision_unavailable", providerStatus: "unavailable" }, { event: "transcription_confirmed", elapsedMs: 1200, edited: false }] },
+  { schema: "shangtu-transcription-timing-v1", page: 1, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 281 }, { event: "transcription_request", elapsedMs: 762 }, { event: "transcription_result", elapsedMs: 910, status: "vision_unavailable", providerStatus: "unavailable", provider: "paddleocr" }, { event: "transcription_confirmed", elapsedMs: 1200, edited: false }] },
   { schema: "shangtu-transcription-timing-v1", page: 2, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 279 }, { event: "transcription_request", elapsedMs: 760 }, { event: "transcription_result", elapsedMs: 8000, status: "vision_timed_out", providerStatus: "timed_out" }] },
   { schema: "shangtu-transcription-timing-v1", page: 3, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 282 }] },
   { schema: "shangtu-transcription-timing-v1", page: 4, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 300 }, { event: "transcription_result", elapsedMs: 900, status: "ok", providerStatus: "ready" }, { event: "transcription_confirmed", elapsedMs: 1500, edited: true }] },
 ]);
-if (timingSummary.trials !== 4 || timingSummary.localAwakening.p50Ms !== 281 || timingSummary.transcriptionResult.count !== 3 || timingSummary.confirmation.count !== 2 || timingSummary.resultAvailableRate !== 3 / 4 || timingSummary.confirmationAvailableRate !== 1 / 2 || timingSummary.editedConfirmationRate !== 1 / 2 || timingSummary.byProviderStatus.length !== 4) throw new Error("时延汇总没有区分本地苏醒、服务结果、确认时延和修改率。");
+if (timingSummary.trials !== 4 || timingSummary.localAwakening.p50Ms !== 281 || timingSummary.transcriptionResult.count !== 3 || timingSummary.confirmation.count !== 2 || timingSummary.resultAvailableRate !== 3 / 4 || timingSummary.confirmationAvailableRate !== 1 / 2 || timingSummary.editedConfirmationRate !== 1 / 2 || timingSummary.byProviderStatus.length !== 4 || timingSummary.byProviderStatus[0].provider !== "paddleocr") throw new Error("时延汇总没有区分 provider、本地苏醒、服务结果、确认时延和修改率。");
+try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100, provider: "not safe" }] }]); throw new Error("时延 schema 接受了不安全 provider 标签。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("时延事件")) throw error; }
 try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_confirmed", elapsedMs: 100, edited: "yes" }] }]); throw new Error("时延 schema 接受了非布尔 edited。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("非布尔") && !error.message.includes("时延事件")) throw error; }
 const comparisonFixture = {
   evidence: "consented_user",
