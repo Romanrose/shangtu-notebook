@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { allowedTools, clarify, createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
 import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { createNotebookServer } from "./notebook-server.mjs";
@@ -7,6 +8,7 @@ import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
+import { invokeTesseract } from "./providers/tesseract.mjs";
 import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { createTranscriptionManifest } from "./prepare-transcription-manifest.mjs";
 import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
@@ -108,6 +110,19 @@ const missingPaddleVlEndpoint = await transcribeInk({ image: tinyInk, provider: 
 if (missingPaddleVlEndpoint.status !== "vision_unconfigured" || missingPaddleVlEndpoint.providerStatus !== "unconfigured") throw new Error("PaddleOCR-VL 缺少 endpoint 时没有安全降级。");
 const configuredPaddleVl = await transcribeInk({ image: tinyInk, provider: "paddleocr-vl", modelId: "PaddleOCR-VL-0.9B", vlEndpoint: "http://paddle-vl.test/layout-parsing", fetchImpl: async () => ({ ok: true, json: async () => paddleVlResponse }) });
 if (configuredPaddleVl.status !== "ok" || configuredPaddleVl.providerStatus !== "ready" || configuredPaddleVl.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR-VL 没有经过统一转写适配器。");
+const missingTesseract = await transcribeInk({ image: tinyInk, provider: "tesseract", modelId: "chi_sim" });
+if (missingTesseract.status !== "vision_unconfigured" || missingTesseract.providerStatus !== "unconfigured") throw new Error("Tesseract 缺少服务端 binary 时没有安全降级。");
+const fakeTesseractSpawn = () => {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stdin = { end: () => queueMicrotask(() => { child.stdout.emit("data", Buffer.from("李白是谁？\n")); child.emit("close", 0); }) };
+  child.kill = () => {};
+  return child;
+};
+const tesseractResult = await invokeTesseract({ image: tinyInk, command: "tesseract", language: "chi_sim", spawnImpl: fakeTesseractSpawn });
+if (tesseractResult?.text !== "李白是谁？") throw new Error("Tesseract stdout 没有映射为统一转写合同。");
+const configuredTesseract = await transcribeInk({ image: tinyInk, provider: "tesseract", modelId: "chi_sim", tesseractBin: "tesseract", spawnImpl: fakeTesseractSpawn });
+if (configuredTesseract.status !== "ok" || configuredTesseract.providerStatus !== "ready" || configuredTesseract.transcription?.text !== "李白是谁？") throw new Error("Tesseract 没有经过统一转写适配器。");
 const missingVlmCredentials = await transcribeInk({ image: tinyInk, provider: "vlm-openai-compatible", modelId: "vision-test", vlmEndpoint: "http://vlm.test/v1/chat/completions", vlmApiKey: "" });
 if (missingVlmCredentials.status !== "vision_unconfigured" || missingVlmCredentials.providerStatus !== "unconfigured") throw new Error("VLM 缺少服务端凭据时没有安全降级。");
 const vlmResponse = { choices: [{ message: { content: JSON.stringify({ text: "李白是谁？", candidates: ["李白是哪位？"] }) } }] };
