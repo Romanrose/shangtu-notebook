@@ -10,8 +10,11 @@ if ("serviceWorker" in navigator) {
 type Mode = "quiet" | "seek";
 type InkState = "rest" | "awakening" | "reading" | "ready";
 type InkImage = { data: string; mimeType: "image/png" };
+type InkBounds = { left: number; top: number; right: number; bottom: number };
 type PendingTranscription = { text: string; image: InkImage; isFixture: boolean };
-type PageRecord = { ink: string | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
+type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
+
+const INK_CAPTURE_PADDING = 18;
 
 async function postJson(path: string, body: unknown) {
   const response = await fetch(path, {
@@ -35,6 +38,7 @@ function Notebook() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
+  const inkBoundsRef = useRef<InkBounds | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const idleTimerRef = useRef<number | null>(null);
   const resultTimerRef = useRef<number | null>(null);
@@ -46,12 +50,12 @@ function Notebook() {
   const [systemNote, setSystemNote] = useState<string | null>(null);
   const [isCollected, setIsCollected] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
-  const [pages, setPages] = useState<PageRecord[]>([{ ink: null, outcome: null, isCollected: false, transcription: null }]);
+  const [pages, setPages] = useState<PageRecord[]>([{ ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
   const [pageIndex, setPageIndex] = useState(0);
 
   const rememberPage = () => {
     const ink = hasInkRef.current ? canvasRef.current?.toDataURL() ?? null : null;
-    setPages((current) => current.map((page, index) => index === pageIndex ? { ink, outcome, isCollected, transcription: pendingTranscription } : page));
+    setPages((current) => current.map((page, index) => index === pageIndex ? { ink, inkBounds: inkBoundsRef.current, outcome, isCollected, transcription: pendingTranscription } : page));
   };
 
   const restoreInk = (ink: string | null) => {
@@ -115,12 +119,24 @@ function Notebook() {
     context.fill();
   };
 
+  const includeInInkBounds = (canvas: HTMLCanvasElement, point: { x: number; y: number }) => {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = point.x / rect.width;
+    const y = point.y / rect.height;
+    const bounds = inkBoundsRef.current;
+    inkBoundsRef.current = bounds
+      ? { left: Math.min(bounds.left, x), top: Math.min(bounds.top, y), right: Math.max(bounds.right, x), bottom: Math.max(bounds.bottom, y) }
+      : { left: x, top: y, right: x, bottom: y };
+  };
+
   const begin = (event: PointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
     drawingRef.current = true;
     const point = pointFor(event);
     lastPointRef.current = point;
     makeDot(event.currentTarget, point);
+    includeInInkBounds(event.currentTarget, point);
     hasInkRef.current = true;
     setHasInk(true);
     if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
@@ -142,12 +158,26 @@ function Notebook() {
     context.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     context.lineTo(next.x, next.y);
     context.stroke();
+    includeInInkBounds(event.currentTarget, next);
     lastPointRef.current = next;
   };
 
   const captureInk = (): InkImage | null => {
     const canvas = canvasRef.current;
-    return canvas && hasInkRef.current ? { data: canvas.toDataURL("image/png"), mimeType: "image/png" } : null;
+    const bounds = inkBoundsRef.current;
+    const rect = canvas?.getBoundingClientRect();
+    if (!canvas || !hasInkRef.current || !bounds || !rect?.width || !rect.height) return null;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const left = Math.max(0, Math.floor(bounds.left * canvas.width - INK_CAPTURE_PADDING * scaleX));
+    const top = Math.max(0, Math.floor(bounds.top * canvas.height - INK_CAPTURE_PADDING * scaleY));
+    const right = Math.min(canvas.width, Math.ceil(bounds.right * canvas.width + INK_CAPTURE_PADDING * scaleX));
+    const bottom = Math.min(canvas.height, Math.ceil(bounds.bottom * canvas.height + INK_CAPTURE_PADDING * scaleY));
+    const crop = document.createElement("canvas");
+    crop.width = Math.max(1, right - left);
+    crop.height = Math.max(1, bottom - top);
+    crop.getContext("2d")?.drawImage(canvas, left, top, crop.width, crop.height, 0, 0, crop.width, crop.height);
+    return { data: crop.toDataURL("image/png"), mimeType: "image/png" };
   };
 
   const requestTranscription = async (image: InkImage) => {
@@ -216,10 +246,11 @@ function Notebook() {
 
   const newPage = () => {
     rememberPage();
-    setPages((current) => [...current, { ink: null, outcome: null, isCollected: false, transcription: null }]);
+    setPages((current) => [...current, { ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
     setPageIndex((current) => current + 1);
     restoreInk(null);
     hasInkRef.current = false;
+    inkBoundsRef.current = null;
     setHasInk(false);
     setInkState("rest");
     setOutcome(null);
@@ -234,6 +265,7 @@ function Notebook() {
     rememberPage();
     const next = pages[nextIndex];
     hasInkRef.current = Boolean(next.ink);
+    inkBoundsRef.current = next.inkBounds;
     setHasInk(Boolean(next.ink));
     setOutcome(next.outcome);
     setPendingTranscription(next.transcription);
