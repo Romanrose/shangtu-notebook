@@ -14,6 +14,7 @@ import { createTranscriptionManifest, sampleIdFromInkFile } from "./prepare-tran
 import { validateConsentedUserCases } from "./transcription-manifest-contract.mjs";
 import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
 import { compareTranscriptionReports } from "./compare-transcription-reports.mjs";
+import { validateTranscriptionCohort } from "./preflight-transcription.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -202,6 +203,16 @@ const timingSummary = summarizeTranscriptionTimings([
   { schema: "shangtu-transcription-timing-v1", page: 4, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "local_awakening", elapsedMs: 300 }, { event: "transcription_result", elapsedMs: 900, status: "ok", providerStatus: "ready", provider: "paddleocr" }, { event: "transcription_confirmed", elapsedMs: 1500, edited: true }] },
 ]);
 if (timingSummary.trials !== 4 || timingSummary.sampleIdCoverage !== 1 / 4 || timingSummary.sampleIds[0] !== "abc123def456" || timingSummary.localAwakening.p50Ms !== 281 || timingSummary.transcriptionResult.count !== 3 || timingSummary.confirmation.count !== 2 || timingSummary.resultAvailableRate !== 3 / 4 || timingSummary.confirmationAvailableRate !== 1 / 2 || timingSummary.editedConfirmationRate !== 1 / 2 || timingSummary.byProviderStatus.length !== 4 || timingSummary.byProviderStatus[0].provider !== "paddleocr" || timingSummary.byProviderStatus[0].confirmation.count !== 1 || timingSummary.byProviderStatus[0].confirmationAvailableRate !== 1 || timingSummary.byProviderStatus[0].editedConfirmationRate !== 0) throw new Error("时延汇总没有保留 sampleId，或没有区分 provider、本地苏醒、服务结果、确认时延和修改率。");
+const preflightIds = ["a", "b"].map((id) => id.repeat(12));
+const preflightResult = validateTranscriptionCohort({
+  manifest: preflightIds.map((id) => ({ id, expected: "李白是谁？", imagePath: `${id}.png`, metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } })),
+  timingPayloads: preflightIds.map((sampleId, index) => ({ schema: "shangtu-transcription-timing-v1", sampleId, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100 + index, status: "ok", providerStatus: "ready", provider: "paddleocr" }, { event: "transcription_confirmed", elapsedMs: 200 + index, edited: index === 1 }] })),
+  provider: "paddleocr",
+});
+if (preflightResult.status !== "ready" || !preflightResult.comparisonReady || preflightResult.confirmationAvailableRate !== 1 || preflightResult.editedConfirmationRate !== 1 / 2) throw new Error("最终实验 preflight 没有验证样本配对、provider 归因和确认率。");
+const incompletePreflight = validateTranscriptionCohort({ manifest: [{ id: preflightIds[0], expected: "李白", imagePath: "a.png", metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } }], timingPayloads: [{ schema: "shangtu-transcription-timing-v1", sampleId: preflightIds[0], timings: [{ event: "pen_up", elapsedMs: 0 }] }] });
+if (incompletePreflight.comparisonReady || incompletePreflight.status !== "needs_result_or_confirmation") throw new Error("最终实验 preflight 接受了缺少成功结果/确认的样本。");
+try { validateTranscriptionCohort({ manifest: preflightIds.map((id) => ({ id, expected: "李白", imagePath: `${id}.png`, metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } })), timingPayloads: preflightIds.map((sampleId) => ({ schema: "shangtu-transcription-timing-v1", sampleId, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100, status: "ok", providerStatus: "ready" }] })) }); throw new Error("最终实验 preflight 接受了缺少 provider 的成功结果。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("时延事件")) throw error; }
 try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100, provider: "not safe" }] }]); throw new Error("时延 schema 接受了不安全 provider 标签。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("时延事件")) throw error; }
 try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100, status: "ok", providerStatus: "ready" }] }]); throw new Error("时延 schema 允许了缺少 provider 的成功结果。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("时延事件")) throw error; }
 try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", sampleId: "not-anonymous", timings: [{ event: "pen_up", elapsedMs: 0 }] }]); throw new Error("时延 schema 接受了不安全 sampleId。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("sampleId")) throw error; }
