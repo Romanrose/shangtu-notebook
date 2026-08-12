@@ -51,14 +51,16 @@ function summarizeTranscriptionTimings(payloads) {
   const groups = new Map();
   for (const trial of trials) {
     const key = `${trial.provider}:${trial.providerStatus}:${trial.status}`;
-    const group = groups.get(key) ?? { provider: trial.provider, providerStatus: trial.providerStatus, status: trial.status, trials: 0, localAwakening: [], transcriptionRequest: [], transcriptionResult: [] };
+    const group = groups.get(key) ?? { provider: trial.provider, providerStatus: trial.providerStatus, status: trial.status, trials: 0, localAwakening: [], transcriptionRequest: [], transcriptionResult: [], confirmation: [], edited: [] };
     group.trials += 1;
     if (trial.localAwakeningMs !== null) group.localAwakening.push(trial.localAwakeningMs);
     if (trial.transcriptionRequestMs !== null) group.transcriptionRequest.push(trial.transcriptionRequestMs);
     if (trial.transcriptionResultMs !== null) group.transcriptionResult.push(trial.transcriptionResultMs);
+    if (trial.confirmationMs !== null) group.confirmation.push(trial.confirmationMs);
+    if (typeof trial.edited === "boolean") group.edited.push(trial.edited);
     groups.set(key, group);
   }
-  const compactGroup = ({ provider, providerStatus, status, trials: count, localAwakening, transcriptionRequest, transcriptionResult }) => ({
+  const compactGroup = ({ provider, providerStatus, status, trials: count, localAwakening, transcriptionRequest, transcriptionResult, confirmation, edited }) => ({
     provider,
     providerStatus,
     status,
@@ -66,6 +68,9 @@ function summarizeTranscriptionTimings(payloads) {
     localAwakening: summarizeValues(localAwakening),
     transcriptionRequest: summarizeValues(transcriptionRequest),
     transcriptionResult: summarizeValues(transcriptionResult),
+    confirmation: summarizeValues(confirmation),
+    confirmationAvailableRate: count ? confirmation.length / count : null,
+    editedConfirmationRate: edited.length ? edited.filter(Boolean).length / edited.length : null,
   });
   const eventCounts = Object.fromEntries([...EVENTS].map((event) => [event, timingSets.filter((timings) => timings.some((timing) => timing.event === event)).length]));
   return {

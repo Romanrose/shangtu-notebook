@@ -29,7 +29,7 @@ npm run summarize:transcription-timing -- \
   --output /absolute/path/to/timing-summary.json
 ```
 
-缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；没有点击确认的样本不会被计入确认率；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 是 provider 端到端返回时延；`confirmation` 和 `editedConfirmationRate` 分别衡量确认延迟与机器转写被用户改动的比例。汇总结果的 `byProviderStatus` 会同时保留 `provider`、`providerStatus` 和 `status`，便于把修改率和可用率与同一 provider 对齐。候选按钮选择也算 `edited=true`，因为最终送入寻迹的文本已改变，但日志不保存改变前后的文本。
+缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；没有点击确认的样本不会被计入确认率；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 是 provider 端到端返回时延；`confirmation` 和 `editedConfirmationRate` 分别衡量确认延迟与机器转写被用户改动的比例。汇总结果的 `byProviderStatus` 会同时保留 `provider`、`providerStatus`、`status`、确认可用率和修改率，便于把修改率和可用率与同一 provider 对齐。候选按钮选择也算 `edited=true`，因为最终送入寻迹的文本已改变，但日志不保存改变前后的文本。
 
 多份 provider benchmark 报告可以进一步做 cohort 校验和决策摘要：
 
