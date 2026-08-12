@@ -18,6 +18,17 @@
 
 在实验分支可打开 `/?experiment=transcription` 进入采样辅助路径。写完并完成本地停笔反馈后，纸页边会提供“下载样本 PNG”，下载的是与 `/api/transcribe` 相同的当前笔迹裁剪图；默认 URL 不显示该入口，也不会上传额外数据或保存服务端副本。下载后的 PNG 需由实验者在本机目录中按上面的 manifest 格式补充人工校对文本和匿名元数据。
 
+也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
+
+```bash
+TRANSCRIPTION_SAMPLE_DIR=/absolute/path/to/handwriting-samples \
+TRANSCRIPTION_MANIFEST_OUTPUT=/absolute/path/to/handwriting-samples/manifest.json \
+TRANSCRIPTION_SAMPLE_METADATA='{"writer":"writer-a","inputMode":"stylus","orientation":"portrait"}' \
+npm run prepare:transcription-manifest
+```
+
+命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
+
 ## 记录指标
 
 `benchmarkTranscription` 记录服务端“调用适配器 → 获得结果”的 p50/p95 时间、每轮状态计数、可用率、主文本命中率、前 3 候选命中率、最终 `providerStatus`、完全匹配和中文字符错误率（CER）。真实测试还应单独记录：
