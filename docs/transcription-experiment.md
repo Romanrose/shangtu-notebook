@@ -236,6 +236,17 @@ npm run bench:transcription
 
 PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；这只是当前 macOS CPU 自托管服务在本项目 8 秒边界下的准入失败，不等于模型在更强硬件或优化部署上的最终质量。PaddleOCR 的这 10 条公开行也没有 exact 或前 3 候选命中，因此当前只能作为“可用且有一定字符级接近度”的实验候选，不能直接作为生产方案。报告保留在本机临时目录，未提交仓库。
 
+### provenance 门禁复跑（2026-08-13）
+
+使用当前 CASIA 导入器重新生成的同一 10 条 `P14` 行、同一 `scale=1.5` 清单；清单每条样本均带 `evidence=public_casia` 和 `cohortId=casia-olhwdb2.2-p14-scale-1_5`。PaddleOCR 与 Tesseract 在同一台机器上串行运行，均为 `warmup=1`、`runs=3`：
+
+| Provider | 可用率 | CER | exact / 候选命中 | p50 / p95 |
+| --- | ---: | ---: | ---: | ---: |
+| PaddleOCR | 30/30 | 0.3265 | 0/10 / 0/10 | 454.0 / 455.4 ms |
+| Tesseract | 27/30 | 0.8895 | 0/10 / 0/10 | 93.6 / 94.7 ms |
+
+比较报告保留了 `public_casia` 和 cohort ID，并输出 `insufficient_evidence`、`recommendedProvider=null`；这验证了真实公开报告可以进入同一比较器，同时不会越过用户样本证据门槛。报告保留在本机 `/tmp/shangtu-casia-public-provenance-*.json`，未提交仓库。
+
 ### 输入缩放敏感性（2026-08-13）
 
 在同一台机器、同一 10 条公开行、同一 PaddleOCR 服务和 `warmup=1`、`runs=3` 条件下，仅改变导入器的 `--scale`：
