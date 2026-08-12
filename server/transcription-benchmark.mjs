@@ -5,7 +5,13 @@ function percentile(values, ratio) {
 }
 
 function mean(values) {
-  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+  const numeric = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+  return numeric.length ? numeric.reduce((total, value) => total + value, 0) / numeric.length : null;
+}
+
+function labeledRate(report, predicate) {
+  const labeled = report.filter((sample) => typeof sample.exactRate === "number");
+  return labeled.length ? labeled.filter(predicate).length / labeled.length : null;
 }
 
 /**
@@ -26,11 +32,11 @@ export function summarizeTranscriptionBenchmark(report) {
     meanOkRate: mean(report.map((sample) => sample.okRate)),
     meanExactRate: mean(report.map((sample) => sample.exactRate)),
     meanCandidateHitRate: mean(report.map((sample) => sample.candidateHitRate)),
-    sampleExactRate: report.length ? report.filter((sample) => sample.exact).length / report.length : 0,
-    sampleCandidateHitRate: report.length ? report.filter((sample) => sample.candidateHitRate > 0).length / report.length : 0,
-    sampleExactAtLeastOnceRate: report.length ? report.filter((sample) => sample.exactRate > 0).length / report.length : 0,
-    sampleExactStableRate: report.length ? report.filter((sample) => sample.exactRate === 1).length / report.length : 0,
-    sampleCandidateHitStableRate: report.length ? report.filter((sample) => sample.candidateHitRate === 1).length / report.length : 0,
+    sampleExactRate: labeledRate(report, (sample) => sample.exact),
+    sampleCandidateHitRate: labeledRate(report, (sample) => sample.candidateHitRate > 0),
+    sampleExactAtLeastOnceRate: labeledRate(report, (sample) => sample.exactRate > 0),
+    sampleExactStableRate: labeledRate(report, (sample) => sample.exactRate === 1),
+    sampleCandidateHitStableRate: labeledRate(report, (sample) => sample.candidateHitRate === 1),
     meanCharacterErrorRate: mean(report.map((sample) => sample.characterErrorRate)),
     meanP50Ms: mean(report.map((sample) => sample.p50Ms)),
     meanP95Ms: mean(report.map((sample) => sample.p95Ms)),
@@ -65,6 +71,7 @@ export function characterErrorRate(expected, actual) {
 export async function benchmarkTranscription({ cases, transcribe, runs = 3, warmup = 0, now = () => performance.now() }) {
   const report = [];
   for (const sample of cases) {
+    const labeled = typeof sample.expected === "string";
     const durations = [];
     const statusCounts = {};
     let okRuns = 0;
@@ -82,8 +89,8 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
       const actual = transcription?.text ?? "";
       if (transcription) {
         okRuns += 1;
-        if (actual === sample.expected) exactRuns += 1;
-        if ([actual, ...(transcription.candidates ?? [])].includes(sample.expected)) candidateHitRuns += 1;
+        if (labeled && actual === sample.expected) exactRuns += 1;
+        if (labeled && [actual, ...(transcription.candidates ?? [])].includes(sample.expected)) candidateHitRuns += 1;
       }
     }
     const actual = result?.status === "ok" ? result.transcription?.text ?? "" : "";
@@ -92,12 +99,12 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
       expected: sample.expected,
       ...(sample.metadata ? { metadata: sample.metadata } : {}),
       actual,
-      exact: actual === sample.expected,
-      characterErrorRate: characterErrorRate(sample.expected, actual),
+      exact: labeled ? actual === sample.expected : null,
+      characterErrorRate: labeled ? characterErrorRate(sample.expected, actual) : null,
       providerStatus: result?.providerStatus ?? "unknown",
       okRate: okRuns / runs,
-      exactRate: exactRuns / runs,
-      candidateHitRate: candidateHitRuns / runs,
+      exactRate: labeled ? exactRuns / runs : null,
+      candidateHitRate: labeled ? candidateHitRuns / runs : null,
       statusCounts,
       runs,
       warmup,

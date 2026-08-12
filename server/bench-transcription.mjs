@@ -4,14 +4,14 @@ import { benchmarkTranscription, summarizeTranscriptionBenchmark } from "./trans
 import { transcriptionBenchmarkCases } from "./fixtures/transcription-benchmark.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
 
-async function loadCases(manifestPath) {
+async function loadCases(manifestPath, { allowUnlabeled = false } = {}) {
   if (!manifestPath) return transcriptionBenchmarkCases;
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (!Array.isArray(manifest) || !manifest.length) throw new Error("TRANSCRIPTION_BENCHMARK_MANIFEST 必须是非空 JSON 数组。");
   const manifestRoot = resolve(dirname(manifestPath));
   return Promise.all(manifest.map(async (sample) => {
-    if (!sample?.id || !sample.expected || !sample.imagePath || extname(sample.imagePath).toLowerCase() !== ".png") {
-      throw new Error("每条实验样本必须包含 id、expected 和 PNG imagePath。");
+    if (!sample?.id || (!allowUnlabeled && !sample.expected) || (allowUnlabeled && sample.expected !== undefined && typeof sample.expected !== "string") || !sample.imagePath || extname(sample.imagePath).toLowerCase() !== ".png") {
+      throw new Error(allowUnlabeled ? "每条实验样本必须包含 id 和 PNG imagePath；expected 可选。" : "每条实验样本必须包含 id、expected 和 PNG imagePath。");
     }
     const imagePath = resolve(dirname(manifestPath), sample.imagePath);
     if (imagePath !== manifestRoot && !imagePath.startsWith(`${manifestRoot}/`)) throw new Error("实验样本 imagePath 必须位于清单目录内。");
@@ -21,7 +21,7 @@ async function loadCases(manifestPath) {
       return [key, value];
     }));
     const data = (await readFile(imagePath)).toString("base64");
-    return { id: sample.id, expected: sample.expected, ...(Object.keys(metadata).length ? { metadata } : {}), image: { mimeType: "image/png", data: `data:image/png;base64,${data}` } };
+    return { id: sample.id, ...(sample.expected !== undefined ? { expected: sample.expected } : {}), ...(Object.keys(metadata).length ? { metadata } : {}), image: { mimeType: "image/png", data: `data:image/png;base64,${data}` } };
   }));
 }
 
@@ -30,7 +30,8 @@ const providers = (process.env.TRANSCRIPTION_BENCH_PROVIDERS ?? provider).split(
 const manifestPath = process.env.TRANSCRIPTION_BENCHMARK_MANIFEST;
 if (!providers.length || providers.some((candidate) => !["fixture", "paddleocr", "paddleocr-vl", "vlm-openai-compatible"].includes(candidate))) throw new Error(`暂不支持实验 provider: ${providers.join(",")}`);
 if (providers.some((candidate) => candidate !== "fixture") && !manifestPath) throw new Error("真实转写实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。");
-const cases = await loadCases(manifestPath);
+const allowUnlabeled = process.env.TRANSCRIPTION_BENCHMARK_UNLABELED === "1";
+const cases = await loadCases(manifestPath, { allowUnlabeled });
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
 const warmup = Number(process.env.TRANSCRIPTION_BENCH_WARMUP ?? 0);

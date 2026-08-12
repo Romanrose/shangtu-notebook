@@ -29,6 +29,19 @@ npm run prepare:transcription-manifest
 
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 
+如果还没有完成人工校对，只想先测真实样本的服务可用率和延迟，可以在一个只含 `id`、`imagePath`、可选 `metadata` 的本机清单上显式设置 `TRANSCRIPTION_BENCHMARK_UNLABELED=1`：
+
+```bash
+TRANSCRIPTION_BENCHMARK_UNLABELED=1 \
+TRANSCRIPTION_BENCH_PROVIDERS=paddleocr,paddleocr-vl \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/handwriting-samples/unlabeled.json \
+PADDLEOCR_ENDPOINT=http://127.0.0.1:8080/ocr \
+PADDLEOCR_VL_ENDPOINT=http://127.0.0.1:8081/layout-parsing \
+npm run bench:transcription
+```
+
+该模式仍会记录 `okRate`、状态计数和 p50/p95，但 `exact`、CER、质量命中率及稳定命中率全部为 `null`；只有补齐人工校对文本后，样本才可用于 provider 质量排名。
+
 ## 记录指标
 
 `benchmarkTranscription` 记录服务端“调用适配器 → 获得结果”的 p50/p95 时间、每轮状态计数、可用率、主文本命中率、前 3 候选命中率、最终 `providerStatus`、完全匹配和中文字符错误率（CER）。真实测试还应单独记录：
