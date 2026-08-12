@@ -1,13 +1,31 @@
-import { readdir, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
+import { validateTimingPayload } from "./summarize-transcription-timings.mjs";
 
 const ALLOWED_METADATA = ["writer", "inputMode", "orientation", "textType", "evidence", "cohortId", "consent"];
 const EXPORTED_SAMPLE_PATTERN = /^shangtu-ink-([A-Za-z0-9]{12})-page-\d{2}-\d{14}\.png$/;
+const EXPORTED_TIMING_PATTERN = /^shangtu-transcription-timing-([A-Za-z0-9]{12})-page-\d{2}-\d{14}\.json$/;
 
 export function sampleIdFromInkFile(file) {
   return EXPORTED_SAMPLE_PATTERN.exec(file)?.[1] ?? null;
+}
+
+export function sampleIdFromTimingFile(file) {
+  return EXPORTED_TIMING_PATTERN.exec(file)?.[1] ?? null;
+}
+
+export function validateTimingCoverage({ sampleFiles, timingFiles }) {
+  if (!Array.isArray(sampleFiles) || !Array.isArray(timingFiles)) throw new Error("PNG 和 timing 文件必须是数组。");
+  const sampleIds = sampleFiles.map(sampleIdFromInkFile);
+  if (sampleIds.some((id) => !id)) throw new Error("启用 timing 校验时，所有 PNG 都必须使用实验页导出的匿名文件名。");
+  if (new Set(sampleIds).size !== sampleIds.length) throw new Error("导出的 PNG 包含重复 sampleId。");
+  const timingIds = timingFiles.map(sampleIdFromTimingFile);
+  if (timingIds.some((id) => !id)) throw new Error("timing 目录只能包含实验页导出的匿名 JSON 文件。");
+  if (new Set(timingIds).size !== timingIds.length) throw new Error("timing 文件包含重复 sampleId。");
+  if (timingIds.length !== sampleIds.length || sampleIds.some((sampleId) => !timingIds.includes(sampleId))) throw new Error("PNG 与 timing 文件必须按 sampleId 一一对应。");
+  return sampleIds;
 }
 
 export function createTranscriptionManifest({ files, expected, metadata = {} }) {
@@ -38,6 +56,17 @@ async function collectPngFiles(directory) {
   return entries.filter((entry) => entry.isFile() && extname(entry.name).toLowerCase() === ".png").map((entry) => entry.name).sort();
 }
 
+async function collectTimingFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  if (!entries.length || entries.some((entry) => !entry.isFile() || extname(entry.name).toLowerCase() !== ".json")) throw new Error("timing 目录必须是非空且只包含顶层 JSON 文件的目录。");
+  const files = entries.map((entry) => entry.name).sort();
+  await Promise.all(files.map(async (file) => {
+    const payload = JSON.parse(await readFile(resolve(directory, file), "utf8"));
+    validateTimingPayload(payload);
+  }));
+  return files;
+}
+
 async function main() {
   const sampleDirectory = process.env.TRANSCRIPTION_SAMPLE_DIR;
   const outputPath = process.env.TRANSCRIPTION_MANIFEST_OUTPUT;
@@ -45,6 +74,8 @@ async function main() {
   const directory = resolve(sampleDirectory);
   const files = await collectPngFiles(directory);
   if (!files.length) throw new Error("样本目录中没有 PNG 文件。");
+  const timingDirectory = process.env.TRANSCRIPTION_TIMING_DIR ? resolve(process.env.TRANSCRIPTION_TIMING_DIR) : null;
+  if (timingDirectory) validateTimingCoverage({ sampleFiles: files, timingFiles: await collectTimingFiles(timingDirectory) });
   const metadata = process.env.TRANSCRIPTION_SAMPLE_METADATA ? JSON.parse(process.env.TRANSCRIPTION_SAMPLE_METADATA) : {};
   const prompt = createInterface({ input: stdin, output: stdout });
   const expected = [];
