@@ -9,6 +9,8 @@ Pi 不是开放式文件/网络代理。产品运行时只允许四个工具：
 
 Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项目上下文；运行时还会核验实际激活工具是否恰为以上四个。模型凭据尚未配置时，Pi 会话不得启动；纸页本地“识字中”反馈仍可运行。浏览器只把当前笔迹区域 PNG 交给服务端 `/api/transcribe`，收到机器转写后由用户在纸页边编辑确认；服务端 `/api/seek` 才把确认转写与同一 PNG 交给 Pi。浏览器不持有模型、视觉模型或 CNKGraph 凭据。
 
+`/api/transcribe` 的成功响应固定为 `{ status: "ok", transcription, providerStatus }`。`transcription.text` 是待确认主文本，`candidates` 是至多三个不同的备选文本，`lines`（如服务商提供）只包含相对于裁剪 PNG 的 `0–1` 行框与行文本。`providerStatus` 只表达 `fixture`、`unconfigured`、`not_implemented`、`rejected`、`unavailable` 或 `timed_out` 等非敏感运行状态；不得返回密钥、供应商请求详情或原始模型推理。失败也必须返回明确状态，不能编造转写。
+
 Pi 的文本输出只是提案，永远不能直接落页。服务端只接受 JSON 的 `evidence`、`clarification` 或 `evidence_gap` 分支：证据分支必须逐项匹配本次有界子图的 `sourceIds` 和 `path`，而事实正文由匹配到的图谱边确定性生成；任何 JSON、来源或路径不匹配均降级为证据缺口。模型补充仅作为 `association` 接收，并由服务端强制加上“联想：”；其中含年代、出处、馆藏、作者等事实性标记的文本会被丢弃。
 
 当前仓库包含只读 `李白 → 作者 → 将进酒` CNKGraph 子图夹具，仅用于离线演示与合同测试。夹具内置固定版本的公开文本来源，并对夹具外查询返回“证据缺口”；它不依赖旧项目目录。正式版本替换该检索器，但必须保持相同的来源和有界路径语义。

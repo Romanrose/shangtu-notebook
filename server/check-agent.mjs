@@ -4,6 +4,7 @@ import { createNotebookServer } from "./notebook-server.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
+import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, transcribeInk } from "./transcription-adapter.mjs";
 
 const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,iVBORw0KGgo=" };
@@ -64,18 +65,22 @@ const fakeSession = {
 const seekOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession, retrieve: retrieveFixture });
 if (seekOutcome.status !== "ok" || seekOutcome.outcome.kind !== "evidence") throw new Error("寻迹没有只返回规范化 outcome。");
 if ((await runSeek({ transcription: "李白是谁？" })).status !== "model_unconfigured") throw new Error("未配置模型时必须显式降级。");
-if ((await transcribeInk({ image: tinyInk })).status !== "vision_unconfigured") throw new Error("未配置视觉模型时必须显式降级。");
-if ((await transcribeInk({ image: { mimeType: "image/jpeg", data: "invalid" } })).status !== "invalid_ink") throw new Error("视觉适配器没有拒绝非 PNG 笔迹。");
+const unconfiguredTranscription = await transcribeInk({ image: tinyInk });
+if (unconfiguredTranscription.status !== "vision_unconfigured" || unconfiguredTranscription.providerStatus !== "unconfigured") throw new Error("未配置视觉模型时必须显式降级。");
+const invalidTranscription = await transcribeInk({ image: { mimeType: "image/jpeg", data: "invalid" } });
+if (invalidTranscription.status !== "invalid_ink" || invalidTranscription.providerStatus !== "rejected") throw new Error("视觉适配器没有拒绝非 PNG 笔迹。");
 const fixtureTranscriptionResult = await transcribeInk({ image: tinyInk, fixtureMode: true });
-if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription !== fixtureTranscription || fixtureTranscriptionResult.fixture !== true) throw new Error("演练转写没有被明确标记且保留固定文本。");
+if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription?.text !== fixtureTranscription || fixtureTranscriptionResult.transcription?.candidates.length !== 0 || fixtureTranscriptionResult.providerStatus !== "fixture") throw new Error("演练转写没有被明确标记且保留固定文本。");
+const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
+if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
-  transcribe: async ({ image }) => image?.data === tinyInk.data ? { status: "ok", transcription: "李白写过什么？" } : { status: "invalid_ink" },
+  transcribe: async ({ image }) => image?.data === tinyInk.data ? { status: "ok", transcription: { text: "李白写过什么？", candidates: [] }, providerStatus: "test" } : { status: "invalid_ink" },
   seek: async ({ transcription, image }) => ({ status: transcription === "李白写过什么？" && image?.data === tinyInk.data ? "model_unconfigured" : "needs_transcription" }),
 }, async (origin) => {
   const transcribe = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: tinyInk }) });
-  if ((await transcribe.json()).transcription !== "李白写过什么？") throw new Error("转写 API 没有只返回服务端适配器结果。");
+  if ((await transcribe.json()).transcription?.text !== "李白写过什么？") throw new Error("转写 API 没有只返回服务端适配器结果。");
   const seek = await fetch(`${origin}/api/seek`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcription: "李白写过什么？", image: tinyInk }) });
   if ((await seek.json()).status !== "model_unconfigured") throw new Error("寻迹 API 没有保留安全降级状态。");
   const forbidden = await fetch(`${origin}/api/anything`, { method: "POST" });
@@ -87,8 +92,8 @@ try {
   await withServer(undefined, async (origin) => {
     const transcribe = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: tinyInk }) });
     const transcription = await transcribe.json();
-    if (transcription.status !== "ok" || transcription.fixture !== true || transcription.transcription !== fixtureTranscription) throw new Error("服务端演练转写 API 未保留明确标记。");
-    const seek = await fetch(`${origin}/api/seek`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcription: transcription.transcription, image: tinyInk }) });
+    if (transcription.status !== "ok" || transcription.providerStatus !== "fixture" || transcription.transcription?.text !== fixtureTranscription) throw new Error("服务端演练转写 API 未保留明确标记。");
+    const seek = await fetch(`${origin}/api/seek`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcription: transcription.transcription.text, image: tinyInk }) });
     const result = await seek.json();
     if (result.status !== "ok" || result.outcome?.kind !== "evidence") throw new Error("服务端演练链路未产出已核验旁批。");
   });
