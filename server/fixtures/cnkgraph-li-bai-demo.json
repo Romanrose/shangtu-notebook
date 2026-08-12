@@ -1,0 +1,38 @@
+{
+  "source": {
+    "label": "维基文库 · 将进酒（李白）",
+    "url": "https://zh.wikisource.org/w/index.php?title=%E5%B0%87%E9%80%B2%E9%85%92_(%E6%9D%8E%E7%99%BD)&oldid=5977390",
+    "retrieved_at": "2026-08-12"
+  },
+  "nodes": [
+    {
+      "id": "person-li-bai",
+      "label": "李白",
+      "type": "Person",
+      "evidence_refs": ["source:jiangjinjiu-li-bai"]
+    },
+    {
+      "id": "work-jiangjinjiu",
+      "label": "将进酒",
+      "type": "Work",
+      "evidence_refs": ["source:jiangjinjiu-li-bai"]
+    }
+  ],
+  "edges": [
+    {
+      "id": "authored-li-bai-jiangjinjiu",
+      "source": "person-li-bai",
+      "relation": "作者",
+      "target": "work-jiangjinjiu",
+      "evidence_refs": ["source:jiangjinjiu-li-bai"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "source:jiangjinjiu-li-bai",
+      "label": "维基文库《将进酒（李白）》固定版本",
+      "url": "https://zh.wikisource.org/w/index.php?title=%E5%B0%87%E9%80%B2%E9%85%92_(%E6%9D%8E%E7%99%BD)&oldid=5977390",
+      "claim": "页面署名“作者：李白　唐”，并收录《将进酒》文本。"
+    }
+  ]
+}

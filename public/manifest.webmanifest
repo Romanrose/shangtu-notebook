@@ -1,0 +1,12 @@
+{
+  "name": "时空探索手札",
+  "short_name": "时空手札",
+  "description": "一本会回应手写文史问题的时空探索手札。",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#f7f0df",
+  "theme_color": "#e9dec7",
+  "icons": [
+    { "src": "/book-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
