@@ -42,6 +42,8 @@ npm run bench:transcription
 
 该模式仍会记录 `okRate`、状态计数和 p50/p95，但 `exact`、CER、质量命中率及稳定命中率全部为 `null`；只有补齐人工校对文本后，样本才可用于 provider 质量排名。
 
+一次 UI capture smoke（4 张临时折线裁剪图，`warmup=1`、`runs=2`）中，PaddleOCR 与 PaddleOCR-VL 均为 `8/8 unavailable`，没有生成伪造文本；平均 p50 分别约为 `212.5 ms` 与 `1346.2 ms`。这些输入不是中文手写，样本和报告已清理，只用于确认不可识别输入的安全降级与延迟测量，不代表 provider 质量。
+
 ## 记录指标
 
 `benchmarkTranscription` 记录服务端“调用适配器 → 获得结果”的 p50/p95 时间、每轮状态计数、可用率、主文本命中率、前 3 候选命中率、最终 `providerStatus`、完全匹配和中文字符错误率（CER）。真实测试还应单独记录：
