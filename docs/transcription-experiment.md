@@ -60,6 +60,8 @@ npm run prepare:transcription-manifest
 
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 
+如果 PNG 来自实验页导出，标注助手会从严格格式 `shangtu-ink-{sampleId}-page-{page}-{timestamp}.png` 中保留 12 位匿名 `sampleId` 作为 manifest 的顶层 `id`；这样 benchmark 结果 ID 能与同名 timing JSON 配对。普通自定义文件名仍使用 `sample-01` 等顺序 ID；同一目录内重复导出 ID 会被拒绝。
+
 如果还没有完成人工校对，只想先测真实样本的服务可用率和延迟，可以在一个只含 `id`、`imagePath`、可选 `metadata` 的本机清单上显式设置 `TRANSCRIPTION_BENCHMARK_UNLABELED=1`：
 
 ```bash
