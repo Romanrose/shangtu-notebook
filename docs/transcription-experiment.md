@@ -68,6 +68,27 @@ npm run bench:transcription
 
 适配器要求模型只返回 `{ "text": "...", "candidates": ["..."] }`；若模型返回普通文本，也只会作为待确认文本保留。它不使用模型输出的日期、来源或人物关系，因此不会扩大证据边界。
 
+真实对照时可以用矩阵模式让多个 provider 串行使用同一份样本、`runs` 和 `warmup`：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDERS=paddleocr,vlm-openai-compatible \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+TRANSCRIPTION_BENCH_RUNS=5 \
+TRANSCRIPTION_BENCH_WARMUP=1 \
+npm run bench:transcription
+```
+
+矩阵模式仍然只在服务端调用 provider；每个 provider 的报告单独打印，避免把不可用结果或合同夹具混入另一个 provider 的准确率。
+
+需要保存可复核的本地结果时，额外指定输出路径；它只写 JSON 报告，不复制 PNG：
+
+```bash
+TRANSCRIPTION_BENCH_OUTPUT=/tmp/shangtu-transcription-report.json \
+npm run bench:transcription
+```
+
+输出文件包含 provider、样本数、轮数、warmup、期望文本和实际转写。该文件可能包含手写内容，必须保留在本机或受控实验目录，不要提交 Git。
+
 ## 本地管线基线（2026-08-12）
 
 以下结果来自本机 CPU 服务和临时合成 PNG，仅用于确认管线、错误边界与延迟统计，**不代表真实手写识别准确率**：

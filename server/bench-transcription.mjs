@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { benchmarkTranscription } from "./transcription-benchmark.mjs";
 import { transcriptionBenchmarkCases } from "./fixtures/transcription-benchmark.mjs";
@@ -19,24 +19,33 @@ async function loadCases(manifestPath) {
 }
 
 const provider = process.env.TRANSCRIPTION_BENCH_PROVIDER ?? process.env.VISION_MODEL_PROVIDER ?? "fixture";
+const providers = (process.env.TRANSCRIPTION_BENCH_PROVIDERS ?? provider).split(",").map((value) => value.trim()).filter(Boolean);
 const manifestPath = process.env.TRANSCRIPTION_BENCHMARK_MANIFEST;
-if (!["fixture", "paddleocr", "vlm-openai-compatible"].includes(provider)) throw new Error(`暂不支持实验 provider: ${provider}`);
-if (provider !== "fixture" && !manifestPath) throw new Error(`真实 ${provider} 实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。`);
+if (!providers.length || providers.some((candidate) => !["fixture", "paddleocr", "vlm-openai-compatible"].includes(candidate))) throw new Error(`暂不支持实验 provider: ${providers.join(",")}`);
+if (providers.some((candidate) => candidate !== "fixture") && !manifestPath) throw new Error("真实转写实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。");
 const cases = await loadCases(manifestPath);
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
 const warmup = Number(process.env.TRANSCRIPTION_BENCH_WARMUP ?? 0);
 if (!Number.isInteger(warmup) || warmup < 0) throw new Error("TRANSCRIPTION_BENCH_WARMUP 必须是非负整数。");
-const report = await benchmarkTranscription({
-  cases,
-  runs,
-  warmup,
-  transcribe: ({ image }) => provider === "fixture"
-    ? transcribeInk({ image, fixtureMode: true })
-    : transcribeInk({ image, provider, modelId: process.env.VISION_MODEL_ID ?? (provider === "paddleocr" ? "PP-OCRv5" : undefined) }),
-});
-
-console.log(`Provider: ${provider}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
 const showText = process.env.TRANSCRIPTION_BENCH_SHOW_TEXT === "1";
-console.table(report.map(({ expected, actual, ...summary }) => showText ? { ...summary, expected, actual } : summary));
-if (provider === "fixture") console.log("Contract fixture only: this does not measure real handwriting recognition accuracy.");
+const reports = [];
+for (const candidate of providers) {
+  const report = await benchmarkTranscription({
+    cases,
+    runs,
+    warmup,
+    transcribe: ({ image }) => candidate === "fixture"
+      ? transcribeInk({ image, fixtureMode: true })
+      : transcribeInk({ image, provider: candidate, modelId: process.env.VISION_MODEL_ID ?? (candidate === "paddleocr" ? "PP-OCRv5" : undefined) }),
+  });
+  reports.push({ provider: candidate, samples: cases.length, runs, warmup, results: report });
+  console.log(`Provider: ${candidate}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
+  console.table(report.map(({ expected, actual, ...summary }) => showText ? { ...summary, expected, actual } : summary));
+  if (candidate === "fixture") console.log("Contract fixture only: this does not measure real handwriting recognition accuracy.");
+}
+const outputPath = process.env.TRANSCRIPTION_BENCH_OUTPUT;
+if (outputPath) {
+  await writeFile(outputPath, `${JSON.stringify({ providers, samples: cases.length, runs, warmup, reports }, null, 2)}\n`, "utf8");
+  console.log(`Report written to: ${outputPath}`);
+}
