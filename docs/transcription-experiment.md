@@ -68,7 +68,7 @@ TRANSCRIPTION_SAMPLE_METADATA='{"writer":"writer-a","inputMode":"stylus","orient
 npm run prepare:transcription-manifest
 ```
 
-设置 `TRANSCRIPTION_TIMING_DIR` 时，标注助手会先校验 timing JSON，并要求它们与实验页 PNG 的匿名 sampleId 一一对应；缺失、重复、未知 ID 或混入其他 JSON 会在人工输入校对文本前失败。省略该变量仍保留旧的“只准备 PNG manifest”用法，但最终 consented_user 实验应启用它。
+设置 `TRANSCRIPTION_TIMING_DIR` 时，标注助手会先校验 timing JSON，并要求文件名与 JSON 内的匿名 sampleId、实验页 PNG 的 sampleId 三者一一对应；缺失、重复、未知 ID 或混入其他 JSON 会在人工输入校对文本前失败。省略该变量仍保留旧的“只准备 PNG manifest”用法，但最终 consented_user 实验应启用它。
 
 经明确同意的本机实验清单还应在 `TRANSCRIPTION_SAMPLE_METADATA` 中声明例如 `{"evidence":"consented_user","cohortId":"user-cohort-a","consent":"confirmed"}`；这只是实验来源记录，不是上传凭据，也不会随代码提交。只有实验者已取得样本书写者明确同意，并确认样本可用于本次转写比较时，才允许填写 `confirmed`。
 
