@@ -114,6 +114,10 @@ npm run bench:transcription
 - 同一合成数字墨迹“李白”的真实矩阵（`warmup=1`、`runs=3`）：PaddleOCR 输出“杜日”，CER `1.0`、exact `false`、p50 约 `516 ms`、p95 约 `547 ms`；PaddleOCR-VL 输出“ネと ぐ”，CER `2.0`、exact `false`、p50 约 `3584 ms`、p95 约 `3586 ms`。
 - 6 条行楷合成套件（`warmup=1`、`runs=2`）：PaddleOCR 6/6 可用、0/6 exact、平均 CER `0.171`、平均 p50 约 `547 ms`、0 次超时；PaddleOCR-VL 3/6 exact、平均 CER `0.500`、平均 p50 约 `5975 ms`，12 次计数运行中有 5 次超时，候选命中覆盖 4/6 样本。
 
+## 公开样本准入探查（2026-08-13）
+
+PaddleOCR 官方数据集页面列出了 CASIA 中文手写数据集，并展示了 `CASIA_0.jpg` 样例；该页面描述了数据集规模和数据类型，但样例页面没有提供可直接用于句子级 CER 的人工目标文本。将该公开示例转换为 PNG 后做了一次管线探查：PaddleOCR 返回了文本，但没有 ground truth 可核对；PaddleOCR-VL 将整张窄图判为 `image` 布局块，`block_content` 为空，因此按统一适配器安全降级为不可用。该样例未进入 benchmark，也未复制到仓库或实验报告；后续公开数据只有在图像与人工标签一一对应时才可纳入质量比较。[PaddleOCR 中文手写数据集说明](https://www.paddleocr.ai/v3.0.0/en/datasets/handwritten_datasets.html) · [官方 CASIA 示例图](https://www.paddleocr.ai/v3.0.0/datasets/images/CASIA_0.jpg)
+
 ## 本机复跑记录（2026-08-13）
 
 同一 6 条行楷合成套件、同一 macOS ARM64 CPU 环境、`warmup=1`、`runs=2` 的一次复跑中：PaddleOCR 12/12 可用、0/6 样本 exact、平均 CER `0.1712`、平均 p50 `517.7 ms`、平均 p95 `528.3 ms`；PaddleOCR-VL 12/12 可用、6/6 样本 exact、平均 CER `0`、平均 p50 `3162.3 ms`、平均 p95 `3259.1 ms`。本次复跑未出现超时，但与上一条记录的 PaddleOCR-VL 超时率不同，因此只能说明服务状态和负载会影响测量，不能据此替代真实手写样本或直接选择生产 provider。原始 JSON 报告保留在本机 `/tmp/shangtu-synthetic-rerun-20260813.json`，未进入 Git。
