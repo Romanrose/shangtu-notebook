@@ -34,6 +34,8 @@ npm run summarize:transcription-timing -- \
 
 同一 provider 的 timing 汇总应显式传入 `--provider`。这样没有 provider 标签的网络失败、超时或缺结果也会计入该 provider 的分母；成功结果仍必须携带自身 provider 标签，若与命令行标签不一致则拒绝汇总。不同 provider 必须分别生成 timing summary，再传给比较器。
 
+比较器还会校验 timing summary 顶层 `provider` 与其中每个 provider 分组一致；不能通过修改摘要标签把一个 provider 的确认率借给另一个 provider。
+
 为避免把成功结果错误归入未知 provider，timing schema 要求 `status=ok` 的 `transcription_result` 必须带受控 `provider` 标签；失败、超时或未配置结果可以没有 provider，并会进入 `unknown`/失败分组。
 
 多份 provider benchmark 报告可以进一步做 cohort 校验和决策摘要：

@@ -12,8 +12,10 @@ function validateTimingSummary(summary) {
   if (!summary || summary.schema !== "shangtu-transcription-timing-summary-v1" || !Number.isInteger(summary.trials) || summary.trials < 1 || !Array.isArray(summary.sampleIds) || summary.sampleIdCoverage !== 1 || new Set(summary.sampleIds).size !== summary.sampleIds.length || summary.sampleIds.some((id) => typeof id !== "string" || !/^[A-Za-z0-9]{12}$/.test(id)) || !Array.isArray(summary.byProviderStatus)) {
     throw new Error("timing summary 必须完整覆盖唯一的 12 位 sampleId，且使用有效 schema。");
   }
+  if (summary.provider !== undefined && (typeof summary.provider !== "string" || !/^[A-Za-z0-9._-]{1,40}$/.test(summary.provider))) throw new Error("timing summary provider 标签无效。");
   for (const group of summary.byProviderStatus) {
     if (typeof group?.provider !== "string" || !Number.isInteger(group.trials) || group.trials < 1 || !group.confirmation || !Number.isInteger(group.confirmation.count) || group.confirmation.count < 0 || !finite(group.confirmationAvailableRate) || group.confirmationAvailableRate < 0 || group.confirmationAvailableRate > 1 || (group.editedConfirmationRate !== null && (!finite(group.editedConfirmationRate) || group.editedConfirmationRate < 0 || group.editedConfirmationRate > 1))) throw new Error("timing summary 缺少有效 provider 确认/修改率。");
+    if (summary.provider !== undefined && group.provider !== summary.provider) throw new Error("timing summary 顶层 provider 与分组 provider 不一致。");
   }
   return summary;
 }
