@@ -225,11 +225,14 @@ TRANSCRIPTION_BENCH_PROVIDERS=paddleocr,paddleocr-vl \
 TRANSCRIPTION_BENCHMARK_MANIFEST="$CASIA_DIR/manifest.json" \
 TRANSCRIPTION_BENCH_RUNS=3 \
 TRANSCRIPTION_BENCH_WARMUP=1 \
+TRANSCRIPTION_BENCH_PREPROCESSING=casia-scale-1_5 \
 TRANSCRIPTION_BENCH_SHOW_TEXT=1 \
 npm run bench:transcription
 ```
 
 公开数据只用于本地实验，需遵守数据提供方的研究使用条件；PNG、manifest 和报告都不得提交仓库。
+
+若用 `--scale 3` 另建公开 cohort，必须把标签改为 `TRANSCRIPTION_BENCH_PREPROCESSING=casia-scale-3`，并且不能把它与 `casia-scale-1_5` 报告混在同一次比较中。
 
 ### CASIA 首轮结果（2026-08-13）
 
