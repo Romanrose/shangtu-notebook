@@ -81,21 +81,19 @@ const unavailableProvider = await runTranscriptionProvider({ invoke: async () =>
 if (unavailableProvider.status !== "vision_unavailable" || unavailableProvider.providerStatus !== "unavailable") throw new Error("转写不可用没有安全降级。");
 const delegatedProvider = await transcribeInk({ image: tinyInk, provider: "test", modelId: "test", invokeProvider: async () => ({ text: "李白是谁？" }) });
 if (delegatedProvider.status !== "ok" || delegatedProvider.transcription?.text !== "李白是谁？") throw new Error("已配置转写没有经过受控限时适配器。");
+const previousMissingPaddleEndpoint = process.env.PADDLEOCR_ENDPOINT;
+delete process.env.PADDLEOCR_ENDPOINT;
+const missingPaddleEndpoint = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5" });
+if (missingPaddleEndpoint.status !== "vision_unconfigured" || missingPaddleEndpoint.providerStatus !== "unconfigured") throw new Error("PaddleOCR 缺少 endpoint 时没有安全降级。");
+if (previousMissingPaddleEndpoint !== undefined) process.env.PADDLEOCR_ENDPOINT = previousMissingPaddleEndpoint;
 const paddleResponse = { result: { dataInfo: { width: 100, height: 50 }, ocrResults: [{ prunedResult: { rec_texts: ["李白", "是谁？"], rec_boxes: [[10, 5, 40, 20], [45, 5, 95, 20]] } }] } };
 const paddleResult = await invokePaddleOcr({ image: tinyInk, endpoint: "http://paddle.test/ocr", fetchImpl: async (url, options) => {
   if (url !== "http://paddle.test/ocr" || options.method !== "POST" || JSON.parse(options.body).fileType !== 1 || JSON.parse(options.body).file !== "iVBORw0KGgo=") throw new Error("PaddleOCR 请求合同错误。");
   return { ok: true, json: async () => paddleResponse };
 } });
 if (paddleResult?.text !== "李白是谁？" || paddleResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR 响应没有映射为转写合同。");
-const previousPaddleEndpoint = process.env.PADDLEOCR_ENDPOINT;
-process.env.PADDLEOCR_ENDPOINT = "http://paddle.test/ocr";
-try {
-  const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
-  if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
-} finally {
-  if (previousPaddleEndpoint === undefined) delete process.env.PADDLEOCR_ENDPOINT;
-  else process.env.PADDLEOCR_ENDPOINT = previousPaddleEndpoint;
-}
+const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", endpoint: "http://paddle.test/ocr", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
+if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
 const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
 if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
 if (characterErrorRate("李白", "李賀") !== 1 / 2 || characterErrorRate("", "李白") !== 1) throw new Error("中文字符错误率计算错误。");
