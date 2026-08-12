@@ -31,6 +31,20 @@ npm run summarize:transcription-timing -- \
 
 缺少 `transcription_result` 的样本会进入 `missing_result` 分组并降低 `resultAvailableRate`；没有点击确认的样本不会被计入确认率；超时或网络异常不会被当作识别质量错误。`localAwakening` 是本地体验门槛，必须单独保持在 1 秒以内；`transcriptionResult` 是 provider 端到端返回时延；`confirmation` 和 `editedConfirmationRate` 分别衡量确认延迟与机器转写被用户改动的比例。候选按钮选择也算 `edited=true`，因为最终送入寻迹的文本已改变，但日志不保存改变前后的文本。
 
+多份 provider benchmark 报告可以进一步做 cohort 校验和决策摘要：
+
+```bash
+npm run compare:transcription -- \
+  --input /absolute/path/to/paddleocr-report.json \
+  --input /absolute/path/to/tesseract-report.json \
+  --evidence public_casia \
+  --output /absolute/path/to/comparison.json
+```
+
+比较器要求所有报告使用相同的样本数、`runs` 和 `warmup`。`public_casia` 或 `unknown` 证据只输出“尚不足以选择生产 provider”；只有 `consented_user` 且质量字段完整时才允许排名，排序优先 CER，再看稳定 exact/候选命中，最后才看延迟。输出不包含逐条期望文本或实际转写。
+
+已用 CASIA 公开基线的 PaddleOCR 与 Tesseract 报告做过一次实际比较（10 样本、`runs=3`、`warmup=1`）：工具保留两者的 CER、可用率和延迟摘要，但决策结果为 `insufficient_evidence`、`recommendedProvider=null`。这证明公开基线能用于工程对照，却不会被误当成用户证据触发生产选型。
+
 也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
 
 ```bash

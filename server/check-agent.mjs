@@ -12,6 +12,7 @@ import { invokeTesseract } from "./providers/tesseract.mjs";
 import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { createTranscriptionManifest } from "./prepare-transcription-manifest.mjs";
 import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
+import { compareTranscriptionReports } from "./compare-transcription-reports.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -192,6 +193,17 @@ const timingSummary = summarizeTranscriptionTimings([
 ]);
 if (timingSummary.trials !== 4 || timingSummary.localAwakening.p50Ms !== 281 || timingSummary.transcriptionResult.count !== 3 || timingSummary.confirmation.count !== 2 || timingSummary.resultAvailableRate !== 3 / 4 || timingSummary.confirmationAvailableRate !== 1 / 2 || timingSummary.editedConfirmationRate !== 1 / 2 || timingSummary.byProviderStatus.length !== 4) throw new Error("时延汇总没有区分本地苏醒、服务结果、确认时延和修改率。");
 try { summarizeTranscriptionTimings([{ schema: "shangtu-transcription-timing-v1", timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_confirmed", elapsedMs: 100, edited: "yes" }] }]); throw new Error("时延 schema 接受了非布尔 edited。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("非布尔") && !error.message.includes("时延事件")) throw error; }
+const comparisonFixture = {
+  reports: [
+    { provider: "paddleocr", samples: 2, runs: 3, warmup: 1, summary: { meanOkRate: 1, meanCharacterErrorRate: 0.3, sampleExactStableRate: 0.2, sampleCandidateHitStableRate: 0.4, meanP50Ms: 600, meanP95Ms: 700, statusCounts: { ready: 6 } }, results: [{ id: "a" }, { id: "b" }] },
+    { provider: "tesseract", samples: 2, runs: 3, warmup: 1, summary: { meanOkRate: 0.9, meanCharacterErrorRate: 0.8, sampleExactStableRate: 0, sampleCandidateHitStableRate: 0, meanP50Ms: 100, meanP95Ms: 120, statusCounts: { ready: 5, unavailable: 1 } }, results: [{ id: "a" }, { id: "b" }] },
+  ],
+};
+const publicComparison = compareTranscriptionReports([comparisonFixture], { evidence: "public_casia" });
+if (publicComparison.decision.status !== "insufficient_evidence" || publicComparison.providers.some((entry) => entry.rankable)) throw new Error("公开样本比较错误地开启了生产 provider 排名。");
+const consentedComparison = compareTranscriptionReports([comparisonFixture], { evidence: "consented_user" });
+if (consentedComparison.decision.recommendedProvider !== "paddleocr" || !consentedComparison.providers.every((entry) => entry.rankable)) throw new Error("同 cohort 用户样本比较没有按 CER 和稳定率选出候选。");
+try { compareTranscriptionReports([{ ...comparisonFixture, reports: [{ ...comparisonFixture.reports[0], samples: 3, results: [{ id: "a" }, { id: "b" }, { id: "c" }] }, comparisonFixture.reports[1]] }]); throw new Error("比较器接受了不同 cohort。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("相同")) throw error; }
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({

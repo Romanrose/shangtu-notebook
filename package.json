@@ -13,7 +13,8 @@
     "bench:transcription": "node server/bench-transcription.mjs",
     "prepare:transcription-manifest": "node server/prepare-transcription-manifest.mjs",
     "prepare:transcription-casia": "python3 server/prepare-casia-wptt-samples.py",
-    "summarize:transcription-timing": "node server/summarize-transcription-timings.mjs"
+    "summarize:transcription-timing": "node server/summarize-transcription-timings.mjs",
+    "compare:transcription": "node server/compare-transcription-reports.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",
