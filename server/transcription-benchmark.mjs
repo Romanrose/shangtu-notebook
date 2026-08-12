@@ -87,6 +87,7 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
     report.push({
       id: sample.id,
       expected: sample.expected,
+      ...(sample.metadata ? { metadata: sample.metadata } : {}),
       actual,
       exact: actual === sample.expected,
       characterErrorRate: characterErrorRate(sample.expected, actual),

@@ -8,13 +8,20 @@ async function loadCases(manifestPath) {
   if (!manifestPath) return transcriptionBenchmarkCases;
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (!Array.isArray(manifest) || !manifest.length) throw new Error("TRANSCRIPTION_BENCHMARK_MANIFEST 必须是非空 JSON 数组。");
+  const manifestRoot = resolve(dirname(manifestPath));
   return Promise.all(manifest.map(async (sample) => {
     if (!sample?.id || !sample.expected || !sample.imagePath || extname(sample.imagePath).toLowerCase() !== ".png") {
       throw new Error("每条实验样本必须包含 id、expected 和 PNG imagePath。");
     }
     const imagePath = resolve(dirname(manifestPath), sample.imagePath);
+    if (imagePath !== manifestRoot && !imagePath.startsWith(`${manifestRoot}/`)) throw new Error("实验样本 imagePath 必须位于清单目录内。");
+    if (sample.metadata !== undefined && (!sample.metadata || typeof sample.metadata !== "object" || Array.isArray(sample.metadata))) throw new Error("实验样本 metadata 必须是对象。");
+    const metadata = Object.fromEntries(Object.entries(sample.metadata ?? {}).filter(([key, value]) => ["writer", "inputMode", "orientation", "textType"].includes(key)).map(([key, value]) => {
+      if (typeof value !== "string" || value.length > 40) throw new Error("实验样本 metadata 只能包含不超过 40 字符的字符串。");
+      return [key, value];
+    }));
     const data = (await readFile(imagePath)).toString("base64");
-    return { id: sample.id, expected: sample.expected, image: { mimeType: "image/png", data: `data:image/png;base64,${data}` } };
+    return { id: sample.id, expected: sample.expected, ...(Object.keys(metadata).length ? { metadata } : {}), image: { mimeType: "image/png", data: `data:image/png;base64,${data}` } };
   }));
 }
 
