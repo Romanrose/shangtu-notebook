@@ -5,6 +5,7 @@ import { transcriptionBenchmarkCases } from "./fixtures/transcription-benchmark.
 import { transcribeInk } from "./transcription-adapter.mjs";
 
 const EVIDENCE_VALUES = new Set(["unknown", "public_casia", "consented_user"]);
+const PREPROCESSING_PATTERN = /^[A-Za-z0-9._-]{1,80}$/;
 
 async function loadCases(manifestPath, { allowUnlabeled = false } = {}) {
   if (!manifestPath) return transcriptionBenchmarkCases;
@@ -50,6 +51,8 @@ const cohortId = [...manifestCohortIds][0] ?? null;
 const consent = [...manifestConsents][0] ?? null;
 const requestedCohortId = process.env.TRANSCRIPTION_BENCH_COHORT_ID;
 if (requestedCohortId !== undefined && (!/^[A-Za-z0-9._-]{1,80}$/.test(requestedCohortId) || requestedCohortId !== cohortId)) throw new Error("TRANSCRIPTION_BENCH_COHORT_ID 必须与 manifest metadata.cohortId 一致。");
+const preprocessing = process.env.TRANSCRIPTION_BENCH_PREPROCESSING ?? "unknown";
+if (!PREPROCESSING_PATTERN.test(preprocessing)) throw new Error("TRANSCRIPTION_BENCH_PREPROCESSING 必须是 1–80 位安全标签。");
 if (evidence === "consented_user" && (!manifestPath || allowUnlabeled || manifestEvidence.size !== 1 || !cohortId || consent !== "confirmed")) throw new Error("consented_user 实验必须使用已标注 manifest，并在每条样本中声明 evidence、cohortId 和 consent=confirmed。");
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
@@ -75,6 +78,6 @@ for (const candidate of providers) {
 }
 const outputPath = process.env.TRANSCRIPTION_BENCH_OUTPUT;
 if (outputPath) {
-  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, ...(cohortId ? { cohortId } : {}), ...(consent ? { consent } : {}), reports }, null, 2)}\n`, "utf8");
+  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, preprocessing, ...(cohortId ? { cohortId } : {}), ...(consent ? { consent } : {}), reports }, null, 2)}\n`, "utf8");
   console.log(`Report written to: ${outputPath}`);
 }
