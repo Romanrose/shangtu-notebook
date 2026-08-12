@@ -11,6 +11,8 @@ export function createTranscriptionManifest({ files, expected, metadata = {} }) 
     if (typeof value !== "string" || value.length > 40) throw new Error("实验元数据只能包含不超过 40 字符的字符串。");
     return [key, value];
   }));
+  if (normalizedMetadata.cohortId !== undefined && !/^[A-Za-z0-9._-]{1,80}$/.test(normalizedMetadata.cohortId)) throw new Error("实验元数据 cohortId 只能包含字母、数字、点、下划线或连字符。");
+  if (normalizedMetadata.evidence === "consented_user" && (normalizedMetadata.cohortId === undefined || normalizedMetadata.consent !== "confirmed")) throw new Error("consented_user 清单必须同时声明 cohortId 和 consent=confirmed。");
   return files.map((file, index) => {
     if (typeof file !== "string" || extname(file).toLowerCase() !== ".png" || basename(file) !== file) throw new Error("manifest 只接受样本目录顶层的 PNG 文件名。");
     if (typeof expected[index] !== "string" || !expected[index].trim() || expected[index].length > 240) throw new Error("每条样本都必须有 1–240 字符的人工校对文本。");

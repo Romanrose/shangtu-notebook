@@ -113,7 +113,7 @@ npm run bench:transcription
 ]
 ```
 
-`metadata` 只用于实验分层，值应使用匿名标签；当前保留 `writer`、`inputMode`、`orientation` 和 `textType`，每项最多 40 个字符。清单中的 PNG 必须位于清单目录内，避免实验脚本意外读取目录外文件。元数据会随逐样本报告透传，原始 PNG 仍只留在本机。
+`metadata` 只用于实验分层和来源准入，值应使用匿名标签；当前保留 `writer`、`inputMode`、`orientation`、`textType`、`evidence`、`cohortId` 和 `consent`，每项最多 40 个字符。`cohortId` 只能使用字母、数字、点、下划线或连字符。清单中的 PNG 必须位于清单目录内，避免实验脚本意外读取目录外文件。元数据会随逐样本报告透传，原始 PNG 仍只留在本机。
 
 然后在实验分支的服务端运行：
 
