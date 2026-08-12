@@ -6,6 +6,7 @@ import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
+import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
 import { benchmarkTranscription, characterErrorRate } from "./transcription-benchmark.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
@@ -95,6 +96,16 @@ const paddleResult = await invokePaddleOcr({ image: tinyInk, endpoint: "http://p
 if (paddleResult?.text !== "李白是谁？" || paddleResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR 响应没有映射为转写合同。");
 const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", endpoint: "http://paddle.test/ocr", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
 if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
+const paddleVlResponse = { result: { dataInfo: { width: 100, height: 50 }, layoutParsingResults: [{ prunedResult: { parsing_res_list: [{ block_content: "李白是谁？", block_bbox: [10, 5, 90, 25] }] } }] } };
+const paddleVlResult = await invokePaddleOcrVl({ image: tinyInk, endpoint: "http://paddle-vl.test/layout-parsing", fetchImpl: async (url, options) => {
+  if (url !== "http://paddle-vl.test/layout-parsing" || options.method !== "POST" || JSON.parse(options.body).fileType !== 1 || JSON.parse(options.body).visualize !== false) throw new Error("PaddleOCR-VL 请求合同错误。");
+  return { ok: true, json: async () => paddleVlResponse };
+} });
+if (paddleVlResult?.text !== "李白是谁？" || paddleVlResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR-VL 响应没有映射为转写合同。");
+const missingPaddleVlEndpoint = await transcribeInk({ image: tinyInk, provider: "paddleocr-vl", modelId: "PaddleOCR-VL-0.9B" });
+if (missingPaddleVlEndpoint.status !== "vision_unconfigured" || missingPaddleVlEndpoint.providerStatus !== "unconfigured") throw new Error("PaddleOCR-VL 缺少 endpoint 时没有安全降级。");
+const configuredPaddleVl = await transcribeInk({ image: tinyInk, provider: "paddleocr-vl", modelId: "PaddleOCR-VL-0.9B", vlEndpoint: "http://paddle-vl.test/layout-parsing", fetchImpl: async () => ({ ok: true, json: async () => paddleVlResponse }) });
+if (configuredPaddleVl.status !== "ok" || configuredPaddleVl.providerStatus !== "ready" || configuredPaddleVl.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR-VL 没有经过统一转写适配器。");
 const missingVlmCredentials = await transcribeInk({ image: tinyInk, provider: "vlm-openai-compatible", modelId: "vision-test", vlmEndpoint: "http://vlm.test/v1/chat/completions", vlmApiKey: "" });
 if (missingVlmCredentials.status !== "vision_unconfigured" || missingVlmCredentials.providerStatus !== "unconfigured") throw new Error("VLM 缺少服务端凭据时没有安全降级。");
 const vlmResponse = { choices: [{ message: { content: JSON.stringify({ text: "李白是谁？", candidates: ["李白是哪位？"] }) } }] };

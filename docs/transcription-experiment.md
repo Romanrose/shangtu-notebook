@@ -10,7 +10,7 @@
 
 ## 样本与隐私
 
-当前 `npm run bench:transcription` 只运行无用户数据的合同夹具，验证计时与报告格式，**不代表真实识别准确率**。开始真实对比前，建立经明确同意的、只用于测试的样本集：
+不设置 `TRANSCRIPTION_BENCHMARK_MANIFEST` 时，`npm run bench:transcription` 只运行无用户数据的合同夹具，验证计时与报告格式，**不代表真实识别准确率**。设置本机清单后才会读取真实实验 PNG；开始真实对比前，建立经明确同意的、只用于测试的样本集：
 
 - 至少覆盖 1–3 句中文文史问题、人物/地名/书名号、简繁混写与潦草笔迹；每条保留人工校对的目标文本。
 - 按横竖屏、手写笔/手指、短句/长句和不同书写者分层；不要用生产用户笔迹或上传无同意的数据。
@@ -27,6 +27,8 @@
 推荐先以体验门槛而非模型名决策：本地反馈始终达标；网络可用时比较“停笔至可编辑转写”的 p50/p95；CER、修改率与不可用率共同决定是否接入。结果应写入本地、脱敏的实验记录，不能将原始笔迹或密钥提交到仓库。
 
 当前实验分支已增加 PaddleOCR 3.x 自托管 `/ocr` 响应解析器。它只在服务端同时配置 `VISION_MODEL_PROVIDER=paddleocr` 与 `PADDLEOCR_ENDPOINT` 时启用；请求体为裁剪 PNG 的 Base64 与 `fileType: 1`，并将 `rec_texts` / `rec_boxes` 映射到统一合同。未配置 endpoint 时不发请求，响应异常或超时沿用统一安全降级。
+
+当前实验分支也增加了 PaddleOCR-VL 完整 pipeline 适配器。它只在服务端配置 `PADDLEOCR_VL_ENDPOINT` 时启用，调用官方 `/layout-parsing`，将 `layoutParsingResults[].prunedResult.parsing_res_list[].block_content` 映射为统一转写；可视化和 Markdown 图片请求被关闭，避免把无关二进制结果带回应用。
 
 真实 PaddleOCR 基准不使用仓库合同夹具。准备一个仅在本机保存的 JSON 清单（路径相对于清单文件）：
 
@@ -68,6 +70,8 @@ npm run bench:transcription
 
 适配器要求模型只返回 `{ "text": "...", "candidates": ["..."] }`；若模型返回普通文本，也只会作为待确认文本保留。它不使用模型输出的日期、来源或人物关系，因此不会扩大证据边界。
 
+PaddleOCR-VL 的本地完整 pipeline 可按官方文档用 `paddlex --serve --pipeline PaddleOCR-VL` 启动；服务端 endpoint 通常是 `http://127.0.0.1:8080/layout-parsing`。官方说明本地快速验证可能较慢，因此必须把模型下载/加载与稳态推理分开记录。[官方 PaddleOCR-VL 服务说明](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/PaddleOCR-VL.html)
+
 真实对照时可以用矩阵模式让多个 provider 串行使用同一份样本、`runs` 和 `warmup`：
 
 ```bash
@@ -95,8 +99,9 @@ npm run bench:transcription
 
 - 打印体中文句子，稳态 `warmup=1`、`runs=3`：实际结果漏掉开头“李”，CER `0.0909`，p50 约 `991 ms`，p95 约 `997 ms`。
 - 合成数字墨迹“李白”，稳态 `warmup=1`、`runs=3`：实际结果为“杜日”，CER `1.0`，p50 约 `577 ms`，p95 约 `580 ms`。
+- 同一打印体中文句子、同一 macOS ARM64 CPU venv、同一 manifest 的真实矩阵（`warmup=1`、`runs=3`）：PaddleOCR CER `0.0909`、exact `false`、p50 约 `1391 ms`、p95 约 `1474 ms`；PaddleOCR-VL CER `0`、exact `true`、p50 约 `4504 ms`、p95 约 `5007 ms`。
 
-下一轮必须使用获得明确同意的真实手写样本，并与至少一个 VLM 适配器在同一清单、同一轮数和同一服务端条件下比较；在此之前不选择 PaddleOCR 作为最终生产方案。
+这组矩阵只有 1 条打印体样本，不能作为手写或生产决策；下一轮必须使用获得明确同意的真实手写样本，并在同一清单、同一轮数和同一服务端条件下比较，在此之前不选择任何 provider 作为最终生产方案。
 
 ## 运行合同夹具
 
