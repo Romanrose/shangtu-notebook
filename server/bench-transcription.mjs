@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
-import { benchmarkTranscription } from "./transcription-benchmark.mjs";
+import { benchmarkTranscription, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
 import { transcriptionBenchmarkCases } from "./fixtures/transcription-benchmark.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
 
@@ -39,8 +39,10 @@ for (const candidate of providers) {
       ? transcribeInk({ image, fixtureMode: true })
       : transcribeInk({ image, provider: candidate, modelId: process.env.VISION_MODEL_ID ?? (candidate === "paddleocr" ? "PP-OCRv5" : candidate === "paddleocr-vl" ? "PaddleOCR-VL-0.9B" : undefined) }),
   });
-  reports.push({ provider: candidate, samples: cases.length, runs, warmup, results: report });
+  const summary = summarizeTranscriptionBenchmark(report);
+  reports.push({ provider: candidate, samples: cases.length, runs, warmup, summary, results: report });
   console.log(`Provider: ${candidate}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
+  console.log("Summary:", summary);
   console.table(report.map(({ expected, actual, ...summary }) => showText ? { ...summary, expected, actual } : summary));
   if (candidate === "fixture") console.log("Contract fixture only: this does not measure real handwriting recognition accuracy.");
 }

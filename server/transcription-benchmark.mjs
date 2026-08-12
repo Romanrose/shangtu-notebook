@@ -4,6 +4,37 @@ function percentile(values, ratio) {
   return [...values].sort((left, right) => left - right)[index];
 }
 
+function mean(values) {
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+}
+
+/**
+ * Condenses the per-sample report into provider-level comparison signals.
+ * Rates are averaged across samples so a long sample cannot outweigh a short
+ * sample merely because it has more characters.
+ */
+export function summarizeTranscriptionBenchmark(report) {
+  const statusCounts = {};
+  for (const sample of report) {
+    for (const [status, count] of Object.entries(sample.statusCounts ?? {})) {
+      statusCounts[status] = (statusCounts[status] ?? 0) + count;
+    }
+  }
+  return {
+    samples: report.length,
+    totalRuns: report.reduce((total, sample) => total + sample.runs, 0),
+    meanOkRate: mean(report.map((sample) => sample.okRate)),
+    meanExactRate: mean(report.map((sample) => sample.exactRate)),
+    meanCandidateHitRate: mean(report.map((sample) => sample.candidateHitRate)),
+    sampleExactRate: report.length ? report.filter((sample) => sample.exact).length / report.length : 0,
+    sampleCandidateHitRate: report.length ? report.filter((sample) => sample.candidateHitRate > 0).length / report.length : 0,
+    meanCharacterErrorRate: mean(report.map((sample) => sample.characterErrorRate)),
+    meanP50Ms: mean(report.map((sample) => sample.p50Ms)),
+    meanP95Ms: mean(report.map((sample) => sample.p95Ms)),
+    statusCounts,
+  };
+}
+
 export function characterErrorRate(expected, actual) {
   const source = [...expected];
   const target = [...actual];
