@@ -10,7 +10,7 @@ if ("serviceWorker" in navigator) {
 type Mode = "quiet" | "seek";
 type InkState = "rest" | "awakening" | "reading" | "ready";
 type InkImage = { data: string; mimeType: "image/png" };
-type PendingTranscription = { text: string; image: InkImage };
+type PendingTranscription = { text: string; image: InkImage; isFixture: boolean };
 type PageRecord = { ink: string | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
 
 async function postJson(path: string, body: unknown) {
@@ -19,7 +19,7 @@ async function postJson(path: string, body: unknown) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return response.json() as Promise<{ status: string; transcription?: string; outcome?: TraceOutcome }>;
+  return response.json() as Promise<{ status: string; transcription?: string; fixture?: boolean; outcome?: TraceOutcome }>;
 }
 
 function unavailableMessage(status: string, subject: "转写" | "寻迹") {
@@ -154,7 +154,7 @@ function Notebook() {
     try {
       const result = await postJson("/api/transcribe", { image });
       if (result.status === "ok" && result.transcription?.trim()) {
-        setPendingTranscription({ image, text: result.transcription.trim() });
+        setPendingTranscription({ image, text: result.transcription.trim(), isFixture: result.fixture === true });
       } else {
         setSystemNote(unavailableMessage(result.status, "转写"));
       }
@@ -170,7 +170,7 @@ function Notebook() {
     setInkState("reading");
     setSystemNote(null);
     try {
-      const result = await postJson("/api/seek", pendingTranscription);
+      const result = await postJson("/api/seek", { transcription: pendingTranscription.text, image: pendingTranscription.image });
       if (result.status === "ok" && result.outcome) {
         setOutcome(result.outcome);
         setPendingTranscription(null);
@@ -284,7 +284,8 @@ function MarginNotes({ outcome, showTrace, onTrace }: { outcome: TraceOutcome; s
 }
 
 function TranscriptionNote({ transcription, onChange, onConfirm }: { transcription: PendingTranscription; onChange: (text: string) => void; onConfirm: () => void }) {
-  return <aside className="margin-note transcription-note"><span className="note-seal">识</span><p>机器转写，请在纸页边确认：</p><div className="transcription-edit" contentEditable suppressContentEditableWarning role="textbox" aria-label="可编辑机器转写" onInput={(event) => onChange(event.currentTarget.textContent ?? "")}>{transcription.text}</div><button onClick={onConfirm}>以此寻迹</button></aside>;
+  const label = transcription.isFixture ? "演练转写（未调用视觉模型），请在纸页边确认：" : "机器转写，请在纸页边确认：";
+  return <aside className="margin-note transcription-note"><span className="note-seal">识</span><p>{label}</p><div className="transcription-edit" contentEditable suppressContentEditableWarning role="textbox" aria-label="可编辑机器转写" onInput={(event) => onChange(event.currentTarget.textContent ?? "")}>{transcription.text}</div><button onClick={onConfirm}>以此寻迹</button></aside>;
 }
 
 createRoot(document.getElementById("root")!).render(<Notebook />);
