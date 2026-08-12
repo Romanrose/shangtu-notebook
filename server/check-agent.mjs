@@ -146,6 +146,12 @@ const qualityResult = qualityBenchmark[0];
 if (qualityResult.okRate !== 2 / 3 || qualityResult.exactRate !== 1 / 3 || qualityResult.candidateHitRate !== 2 / 3 || qualityResult.statusCounts.ready !== 2 || qualityResult.statusCounts.unavailable !== 1) throw new Error("转写基准没有记录可用率、候选命中率或状态计数。");
 const qualitySummary = summarizeTranscriptionBenchmark(qualityBenchmark);
 if (qualitySummary.samples !== 1 || qualitySummary.totalRuns !== 3 || qualitySummary.meanExactRate !== 1 / 3 || qualitySummary.meanCandidateHitRate !== 2 / 3 || qualitySummary.sampleExactAtLeastOnceRate !== 1 || qualitySummary.sampleExactStableRate !== 0 || qualitySummary.sampleCandidateHitStableRate !== 0 || qualitySummary.statusCounts.unavailable !== 1) throw new Error("转写基准汇总没有保留 provider 决策所需的质量和稳定性指标。");
+const failedQualityBenchmark = await benchmarkTranscription({
+  cases: [{ id: "failed-quality", expected: "李白", image: tinyInk }],
+  runs: 1,
+  transcribe: async () => ({ status: "vision_timed_out", providerStatus: "timed_out" }),
+});
+if (failedQualityBenchmark[0].exact !== null || failedQualityBenchmark[0].characterErrorRate !== null || failedQualityBenchmark[0].okRate !== 0 || failedQualityBenchmark[0].statusCounts.timed_out !== 1) throw new Error("超时样本被错误计入识别质量，或没有保留超时状态。");
 const metadataBenchmark = await benchmarkTranscription({
   cases: [{ id: "metadata", expected: "李白", metadata: { writer: "writer-a", inputMode: "stylus", orientation: "portrait", textType: "person" }, image: tinyInk }],
   runs: 1,

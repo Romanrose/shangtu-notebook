@@ -11,7 +11,8 @@
     "check": "tsc --noEmit",
     "check:agent": "node server/check-agent.mjs",
     "bench:transcription": "node server/bench-transcription.mjs",
-    "prepare:transcription-manifest": "node server/prepare-transcription-manifest.mjs"
+    "prepare:transcription-manifest": "node server/prepare-transcription-manifest.mjs",
+    "prepare:transcription-casia": "python3 server/prepare-casia-wptt-samples.py"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",

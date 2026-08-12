@@ -93,14 +93,15 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, warm
         if (labeled && [actual, ...(transcription.candidates ?? [])].includes(sample.expected)) candidateHitRuns += 1;
       }
     }
-    const actual = result?.status === "ok" ? result.transcription?.text ?? "" : "";
+    const finalTranscription = result?.status === "ok" ? result.transcription : null;
+    const actual = finalTranscription?.text ?? "";
     report.push({
       id: sample.id,
       expected: sample.expected,
       ...(sample.metadata ? { metadata: sample.metadata } : {}),
       actual,
-      exact: labeled ? actual === sample.expected : null,
-      characterErrorRate: labeled ? characterErrorRate(sample.expected, actual) : null,
+      exact: labeled && finalTranscription ? actual === sample.expected : null,
+      characterErrorRate: labeled && finalTranscription ? characterErrorRate(sample.expected, actual) : null,
       providerStatus: result?.providerStatus ?? "unknown",
       okRate: okRuns / runs,
       exactRate: labeled ? exactRuns / runs : null,
