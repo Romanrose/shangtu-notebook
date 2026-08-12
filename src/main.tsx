@@ -14,6 +14,7 @@ type InkBounds = { left: number; top: number; right: number; bottom: number };
 type TranscriptionProposal = { text: string; candidates: string[]; lines?: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> };
 type PendingTranscription = { text: string; candidates: string[]; image: InkImage; isFixture: boolean };
 type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
+type TranscriptionTiming = { event: "pen_up" | "local_awakening" | "transcription_request" | "transcription_result"; elapsedMs: number; status?: string; providerStatus?: string };
 
 const INK_CAPTURE_PADDING = 18;
 const isTranscriptionExperiment = new URLSearchParams(window.location.search).get("experiment") === "transcription";
@@ -26,6 +27,21 @@ function downloadInkSample(image: InkImage, pageIndex: number) {
   const link = document.createElement("a");
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   link.download = `shangtu-ink-page-${String(pageIndex + 1).padStart(2, "0")}-${stamp}.png`;
+  link.href = objectUrl;
+  document.body.append(link);
+  link.click();
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }, 1000);
+}
+
+function downloadTranscriptionTimings(timings: TranscriptionTiming[], pageIndex: number) {
+  const payload = JSON.stringify({ schema: "shangtu-transcription-timing-v1", page: pageIndex + 1, timings }, null, 2);
+  const objectUrl = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  link.download = `shangtu-transcription-timing-page-${String(pageIndex + 1).padStart(2, "0")}-${stamp}.json`;
   link.href = objectUrl;
   document.body.append(link);
   link.click();
@@ -74,6 +90,14 @@ function Notebook() {
   const [pages, setPages] = useState<PageRecord[]>([{ ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
   const [pageIndex, setPageIndex] = useState(0);
   const [experimentSample, setExperimentSample] = useState<InkImage | null>(null);
+  const [experimentTimings, setExperimentTimings] = useState<TranscriptionTiming[]>([]);
+  const penUpAtRef = useRef<number | null>(null);
+
+  const recordTiming = (event: TranscriptionTiming["event"], status?: string, providerStatus?: string) => {
+    if (!isTranscriptionExperiment || penUpAtRef.current === null) return;
+    const timing = { event, elapsedMs: Math.round(performance.now() - penUpAtRef.current), ...(status ? { status } : {}), ...(providerStatus ? { providerStatus } : {}) } satisfies TranscriptionTiming;
+    setExperimentTimings((current) => [...current, timing]);
+  };
 
   const rememberPage = () => {
     const ink = hasInkRef.current ? canvasRef.current?.toDataURL() ?? null : null;
@@ -167,6 +191,8 @@ function Notebook() {
     setOutcome(null);
     setPendingTranscription(null);
     setExperimentSample(null);
+    setExperimentTimings([]);
+    penUpAtRef.current = null;
     setSystemNote(null);
     setShowTrace(false);
     setIsCollected(false);
@@ -204,14 +230,17 @@ function Notebook() {
   };
 
   const requestTranscription = async (image: InkImage) => {
+    recordTiming("transcription_request");
     try {
       const result = await postJson("/api/transcribe", { image });
+      recordTiming("transcription_result", result.status, result.providerStatus);
       if (result.status === "ok" && result.transcription?.text) {
         setPendingTranscription({ image, text: result.transcription.text, candidates: result.transcription.candidates ?? [], isFixture: result.providerStatus === "fixture" });
       } else {
         setSystemNote(unavailableMessage(result.status, "转写"));
       }
     } catch {
+      recordTiming("transcription_result", "network_error", "unavailable");
       setSystemNote("转写服务暂不可达；这页笔迹已保留。");
     } finally {
       setInkState("ready");
@@ -238,6 +267,7 @@ function Notebook() {
   };
 
   const beginSeeking = () => {
+    recordTiming("local_awakening");
     setInkState("awakening");
     idleTimerRef.current = window.setTimeout(() => setInkState("reading"), 460);
     const demoCase = getDemoCase();
@@ -262,6 +292,11 @@ function Notebook() {
   const finish = () => {
     drawingRef.current = false;
     lastPointRef.current = null;
+    if (mode === "seek" && hasInkRef.current && isTranscriptionExperiment) {
+      penUpAtRef.current = performance.now();
+      setExperimentTimings([]);
+      setExperimentTimings([{ event: "pen_up", elapsedMs: 0 }]);
+    }
     if (mode === "seek" && hasInkRef.current) {
       // No network work occurs before this local response is visible.
       idleTimerRef.current = window.setTimeout(beginSeeking, 280);
@@ -280,6 +315,8 @@ function Notebook() {
     setOutcome(null);
     setPendingTranscription(null);
     setExperimentSample(null);
+    setExperimentTimings([]);
+    penUpAtRef.current = null;
     setSystemNote(null);
     setIsCollected(false);
     setShowTrace(false);
@@ -295,6 +332,8 @@ function Notebook() {
     setOutcome(next.outcome);
     setPendingTranscription(next.transcription);
     setExperimentSample(null);
+    setExperimentTimings([]);
+    penUpAtRef.current = null;
     setSystemNote(null);
     setIsCollected(next.isCollected);
     setShowTrace(false);
@@ -321,7 +360,7 @@ function Notebook() {
       {outcome && !isCollected && <div className="relation-trail" aria-hidden="true"><i /><i /><i /></div>}
       <canvas ref={canvasRef} className="ink-canvas" onPointerDown={begin} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} />
       {(inkState === "awakening" || inkState === "reading") && <aside className="awakening" aria-live="polite"><span className="ink-orb" />{inkState === "awakening" ? "识字中" : "寻人地 · 核对出处"}</aside>}
-      {isTranscriptionExperiment && experimentSample && <aside className="experiment-export"><span className="note-seal">样</span><p>当前裁剪笔迹已准备好，可保存到本机实验目录。</p><button onClick={() => downloadInkSample(experimentSample, pageIndex)}>下载样本 PNG</button></aside>}
+      {isTranscriptionExperiment && (experimentSample || experimentTimings.length > 0) && <aside className="experiment-export"><span className="note-seal">样</span><p>当前实验记录只含匿名时间与状态，不含笔迹文字。</p>{experimentSample && <button onClick={() => downloadInkSample(experimentSample, pageIndex)}>下载样本 PNG</button>}{experimentTimings.length > 0 && <button onClick={() => downloadTranscriptionTimings(experimentTimings, pageIndex)}>下载时延 JSON</button>}</aside>}
       {pendingTranscription && !outcome && <TranscriptionNote transcription={pendingTranscription} onChange={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onChoose={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onConfirm={confirmTranscription} />}
       {systemNote && !outcome && <aside className="margin-note service-note"><span className="note-seal">记</span><p>{systemNote}</p></aside>}
       {outcome && <MarginNotes outcome={outcome} showTrace={showTrace} onTrace={() => setShowTrace((shown) => !shown)} />}

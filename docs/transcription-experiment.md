@@ -18,6 +18,8 @@
 
 在实验分支可打开 `/?experiment=transcription` 进入采样辅助路径。写完并完成本地停笔反馈后，纸页边会提供“下载样本 PNG”，下载的是与 `/api/transcribe` 相同的当前笔迹裁剪图；默认 URL 不显示该入口，也不会上传额外数据或保存服务端副本。下载后的 PNG 需由实验者在本机目录中按上面的 manifest 格式补充人工校对文本和匿名元数据。
 
+同一实验路径还提供“下载时延 JSON”。它只包含 `schema`、页码，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`，后者附带非敏感的 `status`/`providerStatus`。它不包含转写文本、PNG、URL、凭据或请求体，可将同一笔迹在不同 provider 下的“停笔 → 本地苏醒”和“停笔 → 服务端结果”分开比较。静读模式与默认 URL 不生成该记录。
+
 也可以把准备好的 PNG 放进一个专用本机目录后运行标注助手（不要直接把 Downloads 作为目录）：
 
 ```bash
