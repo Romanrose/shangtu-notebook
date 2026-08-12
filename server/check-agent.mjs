@@ -4,6 +4,7 @@ import { createNotebookServer } from "./notebook-server.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
+import { benchmarkTranscription, characterErrorRate } from "./transcription-benchmark.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -73,6 +74,15 @@ const fixtureTranscriptionResult = await transcribeInk({ image: tinyInk, fixture
 if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription?.text !== fixtureTranscription || fixtureTranscriptionResult.transcription?.candidates.length !== 0 || fixtureTranscriptionResult.providerStatus !== "fixture") throw new Error("演练转写没有被明确标记且保留固定文本。");
 const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
 if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
+if (characterErrorRate("李白", "李賀") !== 1 / 2 || characterErrorRate("", "李白") !== 1) throw new Error("中文字符错误率计算错误。");
+const benchmarkTicks = [0, 8, 10, 22, 30, 45];
+const benchmark = await benchmarkTranscription({
+  cases: [{ id: "test", expected: "李白", image: tinyInk }],
+  runs: 3,
+  now: () => benchmarkTicks.shift(),
+  transcribe: async () => ({ status: "ok", providerStatus: "test", transcription: { text: "李白", candidates: [] } }),
+});
+if (!benchmark[0].exact || benchmark[0].characterErrorRate !== 0 || benchmark[0].p50Ms !== 12 || benchmark[0].p95Ms !== 15) throw new Error("转写基准计时或报告合同错误。");
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
