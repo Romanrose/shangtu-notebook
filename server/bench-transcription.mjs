@@ -70,7 +70,8 @@ for (const candidate of providers) {
       : transcribeInk({ image, provider: candidate, modelId: process.env.VISION_MODEL_ID ?? (candidate === "paddleocr" ? "PP-OCRv5" : candidate === "paddleocr-vl" ? "PaddleOCR-VL-0.9B" : candidate === "tesseract" ? (process.env.TESSERACT_LANG ?? "chi_sim") : undefined) }),
   });
   const summary = summarizeTranscriptionBenchmark(report);
-  reports.push({ provider: candidate, samples: cases.length, runs, warmup, summary, results: report });
+  const reportOutput = showText ? report : report.map(({ expected, actual, ...result }) => result);
+  reports.push({ provider: candidate, samples: cases.length, runs, warmup, summary, results: reportOutput });
   console.log(`Provider: ${candidate}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
   console.log("Summary:", summary);
   console.table(report.map(({ expected, actual, ...summary }) => showText ? { ...summary, expected, actual } : summary));
@@ -78,6 +79,6 @@ for (const candidate of providers) {
 }
 const outputPath = process.env.TRANSCRIPTION_BENCH_OUTPUT;
 if (outputPath) {
-  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, preprocessing, ...(cohortId ? { cohortId } : {}), ...(consent ? { consent } : {}), reports }, null, 2)}\n`, "utf8");
+  await writeFile(outputPath, `${JSON.stringify({ schema: "shangtu-transcription-benchmark-v1", providers, samples: cases.length, runs, warmup, evidence, preprocessing, textIncluded: showText, ...(cohortId ? { cohortId } : {}), ...(consent ? { consent } : {}), reports }, null, 2)}\n`, "utf8");
   console.log(`Report written to: ${outputPath}`);
 }
