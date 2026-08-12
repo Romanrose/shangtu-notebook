@@ -8,6 +8,7 @@ import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
 import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
+import { createTranscriptionManifest } from "./prepare-transcription-manifest.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -151,6 +152,9 @@ const metadataBenchmark = await benchmarkTranscription({
   transcribe: async () => ({ status: "ok", providerStatus: "ready", transcription: { text: "李白", candidates: [] } }),
 });
 if (metadataBenchmark[0].metadata?.inputMode !== "stylus" || metadataBenchmark[0].metadata?.orientation !== "portrait") throw new Error("样本分层元数据没有透传到基准报告。");
+const preparedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { writer: "writer-a", inputMode: "stylus" } });
+if (preparedManifest[0].imagePath !== "sample-a.png" || preparedManifest[0].metadata?.inputMode !== "stylus") throw new Error("本地样本标注助手没有生成规范清单。");
+try { createTranscriptionManifest({ files: ["../outside.png"], expected: ["李白"] }); throw new Error("样本清单允许了目录外路径。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("顶层")) throw error; }
 const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
 if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
 await withServer({
