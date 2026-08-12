@@ -71,6 +71,17 @@ npm run bench:transcription
 
 当前实验分支也增加了 PaddleOCR-VL 完整 pipeline 适配器。它只在服务端配置 `PADDLEOCR_VL_ENDPOINT` 时启用，调用官方 `/layout-parsing`，将 `layoutParsingResults[].prunedResult.parsing_res_list[].block_content` 映射为统一转写；可视化和 Markdown 图片请求被关闭，避免把无关二进制结果带回应用。
 
+实验分支还提供一个经典 Tesseract stdin provider 作为轻量基线。它只在服务端配置 `TESSERACT_BIN` 时启用，将 PNG 通过 stdin 交给 `tesseract stdin stdout`，不写临时图像文件；`TESSDATA_PREFIX`、`TESSERACT_LANG` 和 `TESSERACT_PSM` 也只在服务端读取。它不是手写专用模型，结果只用于实验筛选：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDERS=tesseract \
+TESSERACT_BIN=/opt/homebrew/bin/tesseract \
+TESSERACT_LANG=chi_sim \
+TESSDATA_PREFIX=/absolute/path/to/tessdata \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+npm run bench:transcription
+```
+
 真实 PaddleOCR 基准不使用仓库合同夹具。准备一个仅在本机保存的 JSON 清单（路径相对于清单文件）：
 
 ```json
@@ -217,6 +228,10 @@ PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；�
 | 3× | 30/30 | 0.3738 | 778.7 / 782.3 ms | 0/10 / 0/10 |
 
 在这组公开样本上，1.5× 相对 3× 的 p50 低 `150.4 ms`，CER 低 `0.0473`；但这只是当前渲染方式和 CPU 服务的局部结果。它支持把较小输入作为后续实验候选预处理，而不是证明 1.5× 对华为平板真实裁剪笔迹普遍更优。最终仍须用同一批获得同意的真实样本复核，并同时观察用户修改率和候选命中率。
+
+### Tesseract 经典 OCR 准入结果（2026-08-13）
+
+使用同一批 10 位公开书写者、同一 1.5× PNG 和 `chi_sim` 模型，通过统一 adapter 的 stdin provider、`--psm 7`、`warmup=1`、`runs=3` 运行：30 次中 27 次 `ready`、3 次 `unavailable`，平均可用率 `0.9`；可用最终结果的平均 CER `0.8895`，exact `0/10`、候选命中 `0/10`，平均 p50 `92.3 ms`、p95 `103.1 ms`。它的速度明显快于 PaddleOCR，但手写质量不足，因此当前不进入生产候选；仍保留在统一 adapter 供后续在真实用户样本上复核。原始报告只保留在本机 `/tmp/shangtu-casia-public-tesseract-20260813.json`，未提交仓库。
 
 ## 运行合同夹具
 
