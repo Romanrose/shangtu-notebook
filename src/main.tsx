@@ -29,6 +29,8 @@ async function postJson(path: string, body: unknown) {
 function unavailableMessage(status: string, subject: "转写" | "寻迹") {
   if (status === "vision_unconfigured") return "这页笔迹已保留；视觉转写尚未配置，暂不能生成机器转写。";
   if (status === "provider_not_implemented") return "视觉转写服务已预留，但尚未接入；这页笔迹会留在纸上。";
+  if (status === "vision_timed_out") return "转写等候过久，已停止本次尝试；这页笔迹仍留在纸上。";
+  if (status === "vision_unavailable") return "转写服务暂不可达；这页笔迹已保留。";
   if (status === "model_unconfigured") return "转写已确认；寻迹内核尚未配置，因此没有生成旁批。";
   if (status === "needs_transcription") return "请先确认这页的机器转写，再继续寻迹。";
   if (status === "invalid_ink") return "这页笔迹截图无法识别；请再写一笔后重试。";
