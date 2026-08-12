@@ -64,6 +64,19 @@ npm run prepare:transcription-manifest
 
 运行 benchmark 时会再次逐条检查这些字段，而不是只检查清单中是否“出现过”授权值：每一条样本都必须有 `evidence=consented_user`、同一个有效 `cohortId`、`consent=confirmed` 和 1–240 字符人工校对文本。任意一条缺失或混入不同 cohort，都会在模型调用前失败，避免把部分授权清单误用于最终 provider 排名。
 
+拿到样本和 timing 导出后，先运行最终实验 preflight；它只读 manifest、PNG 路径和匿名 timing，不调用模型，也不输出人工校对文本：
+
+```bash
+npm run preflight:transcription -- \
+  --manifest /absolute/path/to/handwriting-samples/manifest.json \
+  --timing /absolute/path/to/handwriting-samples/timing-sample-01.json \
+  --timing /absolute/path/to/handwriting-samples/timing-sample-02.json \
+  --provider paddleocr \
+  --output /tmp/shangtu-transcription-preflight.json
+```
+
+最终实验要求 timing 文件按 manifest 的 sampleId 顺序传入；每个成功结果都必须带同一个 provider，且每个样本都应有用户确认。输出 `status=ready` 后，再把同一 manifest 交给 `bench:transcription`，并将 timing 汇总传给 `compare:transcription`；若输出 `needs_result_or_confirmation`，只能继续采集，不能据此做 provider 排名。
+
 命令会按文件名排序，逐张要求输入人工校对文本；空文本、非 PNG、目录外路径和超长文本都会被拒绝。生成的 manifest 与 PNG 一起留在本机，随后可直接交给 `TRANSCRIPTION_BENCHMARK_MANIFEST`。
 
 如果 PNG 来自实验页导出，标注助手会从严格格式 `shangtu-ink-{sampleId}-page-{page}-{timestamp}.png` 中保留 12 位匿名 `sampleId` 作为 manifest 的顶层 `id`；这样 benchmark 结果 ID 能与同名 timing JSON 配对。普通自定义文件名仍使用 `sample-01` 等顺序 ID；同一目录内重复导出 ID 会被拒绝。
