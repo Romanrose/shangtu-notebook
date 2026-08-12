@@ -130,6 +130,8 @@ npm run bench:transcription
 
 矩阵报告还会为每个 provider 输出 `summary`：`meanCharacterErrorRate`、`meanExactRate`、`meanCandidateHitRate`、`meanOkRate`、`meanP50Ms`、`meanP95Ms`、`sampleExactRate`、`sampleCandidateHitRate`、`sampleExactAtLeastOnceRate`、`sampleExactStableRate`、`sampleCandidateHitStableRate`、`totalRuns` 与 `statusCounts`。质量和延迟比率按样本平均，避免长句因为字符更多而在 provider 比较中占更大权重；`sampleExactRate` 表示最后一轮完全命中的样本比例，`sampleExactAtLeastOnceRate` 表示至少一轮完全命中的比例，`sampleExactStableRate` 表示每一轮都完全命中的比例；`sampleCandidateHitRate` 表示至少一轮候选命中的比例，`sampleCandidateHitStableRate` 表示每一轮都有候选命中。最终选择应优先看稳定率，同时保留偶发命中率以识别服务波动。`statusCounts` 用于单独识别超时、不可用和未配置，不应把失败样本当作识别错误计算 CER。
 
+当前实现对这一点做了硬约束：若样本最后一次调用没有得到有效转写，逐样本 `exact` 与 `characterErrorRate` 为 `null`；`okRate`、`statusCounts`、p50/p95 仍然保留。这样“服务没有在 8 秒内回答”和“服务回答了但识别错误”不会混为同一类质量失败。
+
 ## 本地管线基线（2026-08-12）
 
 以下结果来自本机 CPU 服务和临时合成 PNG，仅用于确认管线、错误边界与延迟统计，**不代表真实手写识别准确率**：
@@ -149,6 +151,48 @@ PaddleOCR 官方数据集页面列出了 CASIA 中文手写数据集，并展示
 同一 6 条行楷合成套件、同一 macOS ARM64 CPU 环境、`warmup=1`、`runs=2` 的一次复跑中：PaddleOCR 12/12 可用、0/6 样本 exact、平均 CER `0.1712`、平均 p50 `517.7 ms`、平均 p95 `528.3 ms`；PaddleOCR-VL 12/12 可用、6/6 样本 exact、平均 CER `0`、平均 p50 `3162.3 ms`、平均 p95 `3259.1 ms`。本次复跑未出现超时，但与上一条记录的 PaddleOCR-VL 超时率不同，因此只能说明服务状态和负载会影响测量，不能据此替代真实手写样本或直接选择生产 provider。原始 JSON 报告保留在本机 `/tmp/shangtu-synthetic-rerun-20260813.json`，未进入 Git。
 
 这些矩阵仍只有临时打印体、合成数字墨迹和行楷合成套件，不能作为真实手写或生产决策；历史记录与复跑记录共同说明，provider 的相对质量和延迟会随样本、服务状态与负载变化。下一轮必须使用获得明确同意的真实手写样本，并在同一清单、同一轮数和同一服务端条件下比较，在此之前不选择任何 provider 作为最终生产方案。
+
+## 公开真实手写基线
+
+CASIA-OLHWDB 官方提供带行级标签的联机文本测试包；WPTT 文件同时包含笔划轨迹、行分割和 GB 编码的行标签。它适合先验证服务端适配器在真实手写上的可用率、准确率和延迟，但不代表本项目用户在华为平板上的笔迹分布，也不能替代获得同意的用户样本。[CASIA 联机数据库格式说明](https://nlpr.ia.ac.cn/databases/handwriting/Online_database.html) · [官方数据下载页](https://nlpr.ia.ac.cn/databases/handwriting/Download.html)
+
+为了避免把整套数据或原始笔划提交到 Git，可用明确指定的本机 ZIP 抽取少量不同书写者的 PNG 和 manifest：
+
+```bash
+CASIA_DIR=/tmp/shangtu-casia-samples
+python3 server/prepare-casia-wptt-samples.py \
+  --zip /absolute/path/to/WPTT2.2-Test.zip \
+  --output-dir "$CASIA_DIR" \
+  --writers 741,742,743,744,745,746,747,748,749,750 \
+  --page P14 \
+  --scale 1.5
+```
+
+`--scale` 是明确的输入预处理变量；同一轮比较必须保持不变。默认值为 `3`，若服务端在统一 8 秒边界内无法完成，可另建一个实验目录用 `1.5` 等档位重跑，并把尺寸与超时率一起记录，不能只报告更快的结果。
+
+随后可用与其他实验完全相同的矩阵命令运行。清单中的 `metadata.writer` 使用匿名公开数据标签 `public-casia-*`，结果与用户样本、合成样本分开解释：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDERS=paddleocr,paddleocr-vl \
+TRANSCRIPTION_BENCHMARK_MANIFEST="$CASIA_DIR/manifest.json" \
+TRANSCRIPTION_BENCH_RUNS=3 \
+TRANSCRIPTION_BENCH_WARMUP=1 \
+TRANSCRIPTION_BENCH_SHOW_TEXT=1 \
+npm run bench:transcription
+```
+
+公开数据只用于本地实验，需遵守数据提供方的研究使用条件；PNG、manifest 和报告都不得提交仓库。
+
+### CASIA 首轮结果（2026-08-13）
+
+使用官方 `WPTT2.2-Test.zip` 中 741–750 共 10 位书写者、每人 `P14` 第一条有效行，统一使用 `--scale 1.5` 生成约 918 像素宽的 PNG 和同一份 manifest。服务端串行运行，PaddleOCR 先完成后停止 PaddleOCR-VL，避免 CPU 争用影响延迟：
+
+| Provider | 运行 | 可用率 | CER | exact / 候选命中 | p50 / p95 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| PaddleOCR | warmup=1, runs=3, 30 次 | 30/30 | 0.3265 | 0/10 / 0/10 | 628.3 / 693.7 ms |
+| PaddleOCR-VL | warmup=0, runs=1, 10 次 | 0/10 | 不适用 | 不适用 | 8014.5 / 8014.5 ms |
+
+PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；这只是当前 macOS CPU 自托管服务在本项目 8 秒边界下的准入失败，不等于模型在更强硬件或优化部署上的最终质量。PaddleOCR 的这 10 条公开行也没有 exact 或前 3 候选命中，因此当前只能作为“可用且有一定字符级接近度”的实验候选，不能直接作为生产方案。报告保留在本机临时目录，未提交仓库。
 
 ## 运行合同夹具
 
