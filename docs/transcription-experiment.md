@@ -26,6 +26,8 @@
 
 推荐先以体验门槛而非模型名决策：本地反馈始终达标；网络可用时比较“停笔至可编辑转写”的 p50/p95；CER、修改率与不可用率共同决定是否接入。结果应写入本地、脱敏的实验记录，不能将原始笔迹或密钥提交到仓库。
 
+当前实验分支已增加 PaddleOCR 3.x 自托管 `/ocr` 响应解析器。它只在服务端同时配置 `VISION_MODEL_PROVIDER=paddleocr` 与 `PADDLEOCR_ENDPOINT` 时启用；请求体为裁剪 PNG 的 Base64 与 `fileType: 1`，并将 `rec_texts` / `rec_boxes` 映射到统一合同。未配置 endpoint 时不发请求，响应异常或超时沿用统一安全降级。
+
 ## 运行合同夹具
 
 ```bash
