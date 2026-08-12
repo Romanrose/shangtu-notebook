@@ -25,14 +25,18 @@ if (provider === "paddleocr" && !manifestPath) throw new Error("真实 PaddleOCR
 const cases = await loadCases(manifestPath);
 const runs = Number(process.env.TRANSCRIPTION_BENCH_RUNS ?? 3);
 if (!Number.isInteger(runs) || runs < 1) throw new Error("TRANSCRIPTION_BENCH_RUNS 必须是正整数。");
+const warmup = Number(process.env.TRANSCRIPTION_BENCH_WARMUP ?? 0);
+if (!Number.isInteger(warmup) || warmup < 0) throw new Error("TRANSCRIPTION_BENCH_WARMUP 必须是非负整数。");
 const report = await benchmarkTranscription({
   cases,
   runs,
+  warmup,
   transcribe: ({ image }) => provider === "fixture"
     ? transcribeInk({ image, fixtureMode: true })
     : transcribeInk({ image, provider, modelId: process.env.VISION_MODEL_ID ?? "PP-OCRv5" }),
 });
 
-console.log(`Provider: ${provider}; samples: ${cases.length}; runs: ${runs}`);
-console.table(report.map(({ expected, actual, ...summary }) => summary));
+console.log(`Provider: ${provider}; samples: ${cases.length}; runs: ${runs}; warmup: ${warmup}`);
+const showText = process.env.TRANSCRIPTION_BENCH_SHOW_TEXT === "1";
+console.table(report.map(({ expected, actual, ...summary }) => showText ? { ...summary, expected, actual } : summary));
 if (provider === "fixture") console.log("Contract fixture only: this does not measure real handwriting recognition accuracy.");

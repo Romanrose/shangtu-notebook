@@ -28,11 +28,12 @@ export function characterErrorRate(expected, actual) {
  * Runs adapters only in the server process. It intentionally measures the
  * adapter boundary, not local awakening or a user's confirmation time.
  */
-export async function benchmarkTranscription({ cases, transcribe, runs = 3, now = () => performance.now() }) {
+export async function benchmarkTranscription({ cases, transcribe, runs = 3, warmup = 0, now = () => performance.now() }) {
   const report = [];
   for (const sample of cases) {
     const durations = [];
     let result;
+    for (let run = 0; run < warmup; run += 1) await transcribe({ image: sample.image });
     for (let run = 0; run < runs; run += 1) {
       const startedAt = now();
       result = await transcribe({ image: sample.image });
@@ -47,6 +48,7 @@ export async function benchmarkTranscription({ cases, transcribe, runs = 3, now 
       characterErrorRate: characterErrorRate(sample.expected, actual),
       providerStatus: result?.providerStatus ?? "unknown",
       runs,
+      warmup,
       p50Ms: percentile(durations, 0.5),
       p95Ms: percentile(durations, 0.95),
     });

@@ -42,10 +42,24 @@
 TRANSCRIPTION_BENCH_PROVIDER=paddleocr \
 PADDLEOCR_ENDPOINT=http://127.0.0.1:8080/ocr \
 TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+TRANSCRIPTION_BENCH_RUNS=5 \
+TRANSCRIPTION_BENCH_WARMUP=1 \
+TRANSCRIPTION_BENCH_SHOW_TEXT=1 \
 npm run bench:transcription
 ```
 
 PaddleOCR 官方自托管服务可用 `paddlex --serve --pipeline OCR` 启动；当前适配器对应其 `/ocr` JSON 请求和 `ocrResults[].prunedResult` 响应。样本、密钥和实验结果不进入 Git。
+
+`TRANSCRIPTION_BENCH_WARMUP=0` 用于观察冷启动影响；设置为 `1` 或更高会先调用但不计入统计，用于观察稳态。`TRANSCRIPTION_BENCH_SHOW_TEXT=1` 仅在本机终端显示期望文本和实际转写，默认关闭，避免实验日志意外泄露内容。
+
+## 本地管线基线（2026-08-12）
+
+以下结果来自本机 CPU 服务和临时合成 PNG，仅用于确认管线、错误边界与延迟统计，**不代表真实手写识别准确率**：
+
+- 打印体中文句子，稳态 `warmup=1`、`runs=3`：实际结果漏掉开头“李”，CER `0.0909`，p50 约 `991 ms`，p95 约 `997 ms`。
+- 合成数字墨迹“李白”，稳态 `warmup=1`、`runs=3`：实际结果为“杜日”，CER `1.0`，p50 约 `577 ms`，p95 约 `580 ms`。
+
+下一轮必须使用获得明确同意的真实手写样本，并与至少一个 VLM 适配器在同一清单、同一轮数和同一服务端条件下比较；在此之前不选择 PaddleOCR 作为最终生产方案。
 
 ## 运行合同夹具
 
