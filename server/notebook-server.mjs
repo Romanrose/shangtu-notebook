@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
 
@@ -27,7 +28,11 @@ async function readJson(request) {
   }
 }
 
-export function createNotebookApiHandler({ transcribe = transcribeInk, seek = runSeek } = {}) {
+export function seekNotebook(input) {
+  return process.env.NOTEBOOK_FIXTURE_MODE === "1" ? runFixtureSeek(input) : runSeek(input);
+}
+
+export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekNotebook } = {}) {
   return async (request, response, next) => {
     if (request.method !== "POST" || !["/api/transcribe", "/api/seek"].includes(request.url)) {
       if (next) {

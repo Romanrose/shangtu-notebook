@@ -1,17 +1,15 @@
 import { allowedTools, clarify, createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
 import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { createNotebookServer } from "./notebook-server.mjs";
+import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
-import { transcribeInk } from "./transcription-adapter.mjs";
+import { fixtureTranscription, transcribeInk } from "./transcription-adapter.mjs";
 
 const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,iVBORw0KGgo=" };
 
-async function withServer(callback) {
-  const server = createNotebookServer({
-    transcribe: async ({ image }) => image?.data === tinyInk.data ? { status: "ok", transcription: "李白写过什么？" } : { status: "invalid_ink" },
-    seek: async ({ transcription, image }) => ({ status: transcription === "李白写过什么？" && image?.data === tinyInk.data ? "model_unconfigured" : "needs_transcription" }),
-  });
+async function withServer(options, callback) {
+  const server = createNotebookServer(options);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("测试 API 未能监听端口。");
@@ -68,7 +66,14 @@ if (seekOutcome.status !== "ok" || seekOutcome.outcome.kind !== "evidence") thro
 if ((await runSeek({ transcription: "李白是谁？" })).status !== "model_unconfigured") throw new Error("未配置模型时必须显式降级。");
 if ((await transcribeInk({ image: tinyInk })).status !== "vision_unconfigured") throw new Error("未配置视觉模型时必须显式降级。");
 if ((await transcribeInk({ image: { mimeType: "image/jpeg", data: "invalid" } })).status !== "invalid_ink") throw new Error("视觉适配器没有拒绝非 PNG 笔迹。");
-await withServer(async (origin) => {
+const fixtureTranscriptionResult = await transcribeInk({ image: tinyInk, fixtureMode: true });
+if (fixtureTranscriptionResult.status !== "ok" || fixtureTranscriptionResult.transcription !== fixtureTranscription || fixtureTranscriptionResult.fixture !== true) throw new Error("演练转写没有被明确标记且保留固定文本。");
+const fixtureSeek = await runFixtureSeek({ transcription: fixtureTranscription, image: tinyInk });
+if (fixtureSeek.status !== "ok" || fixtureSeek.outcome.kind !== "evidence") throw new Error("演练寻迹没有经过受限 Pi 输出核验。");
+await withServer({
+  transcribe: async ({ image }) => image?.data === tinyInk.data ? { status: "ok", transcription: "李白写过什么？" } : { status: "invalid_ink" },
+  seek: async ({ transcription, image }) => ({ status: transcription === "李白写过什么？" && image?.data === tinyInk.data ? "model_unconfigured" : "needs_transcription" }),
+}, async (origin) => {
   const transcribe = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: tinyInk }) });
   if ((await transcribe.json()).transcription !== "李白写过什么？") throw new Error("转写 API 没有只返回服务端适配器结果。");
   const seek = await fetch(`${origin}/api/seek`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcription: "李白写过什么？", image: tinyInk }) });
@@ -76,6 +81,21 @@ await withServer(async (origin) => {
   const forbidden = await fetch(`${origin}/api/anything`, { method: "POST" });
   if (forbidden.status !== 404) throw new Error("API 暴露了白名单之外的路径。");
 });
+const previousFixtureMode = process.env.NOTEBOOK_FIXTURE_MODE;
+process.env.NOTEBOOK_FIXTURE_MODE = "1";
+try {
+  await withServer(undefined, async (origin) => {
+    const transcribe = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: tinyInk }) });
+    const transcription = await transcribe.json();
+    if (transcription.status !== "ok" || transcription.fixture !== true || transcription.transcription !== fixtureTranscription) throw new Error("服务端演练转写 API 未保留明确标记。");
+    const seek = await fetch(`${origin}/api/seek`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transcription: transcription.transcription, image: tinyInk }) });
+    const result = await seek.json();
+    if (result.status !== "ok" || result.outcome?.kind !== "evidence") throw new Error("服务端演练链路未产出已核验旁批。");
+  });
+} finally {
+  if (previousFixtureMode === undefined) delete process.env.NOTEBOOK_FIXTURE_MODE;
+  else process.env.NOTEBOOK_FIXTURE_MODE = previousFixtureMode;
+}
 const session = await createPiNotebookSession({ retrieve: async () => ({ kind: "evidence_gap" }) });
 if (session !== null && !process.env.PI_MODEL_PROVIDER) throw new Error("未配置模型时不应创建 Pi 会话。");
 session?.session.dispose();

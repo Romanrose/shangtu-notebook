@@ -33,6 +33,16 @@ npm run dev -- --host 0.0.0.0
 
 完整的三分钟真机验收见 [`docs/demo-recording.md`](docs/demo-recording.md)。
 
+### 开发用全链路演练
+
+不配置任何密钥时，可只在服务端开启下列夹具，排练“Canvas 截图 → 可编辑确认 → 已核验旁批”：
+
+```bash
+NOTEBOOK_FIXTURE_MODE=1 npm run dev -- --host 0.0.0.0
+```
+
+该模式不调用视觉模型、Pi 模型或网络；纸页会明确显示“演练转写（未调用视觉模型）”，并只使用仓库固定的 CNKGraph 演示来源。默认不启用，不能作为真实识别或生产回退。
+
 ## 验收分支
 
 1. 成功寻迹：证据旁批、寻迹卡与来源。

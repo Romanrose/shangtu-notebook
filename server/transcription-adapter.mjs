@@ -1,4 +1,5 @@
 const MAX_IMAGE_BYTES = 2_000_000;
+export const fixtureTranscription = "李白写过《将进酒》吗？";
 
 function decodeDataUrl(image) {
   if (!image || typeof image !== "object") return null;
@@ -14,8 +15,11 @@ function decodeDataUrl(image) {
  * It deliberately accepts an opaque PNG and never exposes provider settings
  * or credentials to the browser.
  */
-export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID }) {
+export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE }) {
   if (!decodeDataUrl(image)) return { status: "invalid_ink" };
+  if (fixtureMode === true || fixtureMode === "1") {
+    return { status: "ok", transcription: fixtureTranscription, fixture: true };
+  }
   if (!provider || !modelId) return { status: "vision_unconfigured" };
   return {
     status: "provider_not_implemented",
