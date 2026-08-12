@@ -10,7 +10,7 @@ import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
 import { invokeTesseract } from "./providers/tesseract.mjs";
 import { benchmarkTranscription, characterErrorRate, summarizeTranscriptionBenchmark } from "./transcription-benchmark.mjs";
-import { createTranscriptionManifest } from "./prepare-transcription-manifest.mjs";
+import { createTranscriptionManifest, sampleIdFromInkFile } from "./prepare-transcription-manifest.mjs";
 import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
 import { compareTranscriptionReports } from "./compare-transcription-reports.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
@@ -177,6 +177,10 @@ const metadataBenchmark = await benchmarkTranscription({
 if (metadataBenchmark[0].metadata?.inputMode !== "stylus" || metadataBenchmark[0].metadata?.orientation !== "portrait") throw new Error("样本分层元数据没有透传到基准报告。");
 const preparedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { writer: "writer-a", inputMode: "stylus" } });
 if (preparedManifest[0].imagePath !== "sample-a.png" || preparedManifest[0].metadata?.inputMode !== "stylus") throw new Error("本地样本标注助手没有生成规范清单。");
+if (sampleIdFromInkFile("shangtu-ink-abc123def456-page-01-20260813012345.png") !== "abc123def456" || sampleIdFromInkFile("writer-a.png") !== null) throw new Error("导出 PNG 的匿名 sampleId 没有被安全提取。");
+const pairedManifest = createTranscriptionManifest({ files: ["shangtu-ink-abc123def456-page-01-20260813012345.png"], expected: ["李白是谁？"] });
+if (pairedManifest[0].id !== "abc123def456") throw new Error("导出 PNG 的 sampleId 没有透传到 manifest。");
+try { createTranscriptionManifest({ files: ["shangtu-ink-abc123def456-page-01-20260813012345.png", "shangtu-ink-abc123def456-page-02-20260813012346.png"], expected: ["李白", "李白"] }); throw new Error("样本清单允许了重复匿名 sampleId。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("重复 sampleId")) throw error; }
 const preparedConsentedManifest = createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } });
 if (preparedConsentedManifest[0].metadata?.evidence !== "consented_user" || preparedConsentedManifest[0].metadata?.consent !== "confirmed") throw new Error("本地样本标注助手没有保留授权来源元数据。");
 try { createTranscriptionManifest({ files: ["sample-a.png"], expected: ["李白是谁？"], metadata: { evidence: "consented_user", cohortId: "user-cohort-a" } }); throw new Error("本地样本标注助手允许了未确认授权的清单。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("consent=confirmed")) throw error; }
