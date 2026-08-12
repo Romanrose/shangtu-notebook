@@ -1,3 +1,5 @@
+import { createTranscription } from "./transcription-contract.mjs";
+
 const MAX_IMAGE_BYTES = 2_000_000;
 export const fixtureTranscription = "李白写过《将进酒》吗？";
 
@@ -16,14 +18,14 @@ function decodeDataUrl(image) {
  * or credentials to the browser.
  */
 export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE }) {
-  if (!decodeDataUrl(image)) return { status: "invalid_ink" };
+  if (!decodeDataUrl(image)) return { status: "invalid_ink", providerStatus: "rejected" };
   if (fixtureMode === true || fixtureMode === "1") {
-    return { status: "ok", transcription: fixtureTranscription, fixture: true };
+    return { status: "ok", transcription: createTranscription({ text: fixtureTranscription }), providerStatus: "fixture" };
   }
-  if (!provider || !modelId) return { status: "vision_unconfigured" };
+  if (!provider || !modelId) return { status: "vision_unconfigured", providerStatus: "unconfigured" };
   return {
     status: "provider_not_implemented",
-    provider,
+    providerStatus: "not_implemented",
     message: "视觉转写适配器尚未接入已配置的服务商。",
   };
 }

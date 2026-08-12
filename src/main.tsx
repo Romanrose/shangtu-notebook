@@ -11,6 +11,7 @@ type Mode = "quiet" | "seek";
 type InkState = "rest" | "awakening" | "reading" | "ready";
 type InkImage = { data: string; mimeType: "image/png" };
 type InkBounds = { left: number; top: number; right: number; bottom: number };
+type TranscriptionProposal = { text: string; candidates: string[]; lines?: Array<{ text: string; box: { x: number; y: number; width: number; height: number } }> };
 type PendingTranscription = { text: string; image: InkImage; isFixture: boolean };
 type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
 
@@ -22,7 +23,7 @@ async function postJson(path: string, body: unknown) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return response.json() as Promise<{ status: string; transcription?: string; fixture?: boolean; outcome?: TraceOutcome }>;
+  return response.json() as Promise<{ status: string; transcription?: TranscriptionProposal; providerStatus?: string; outcome?: TraceOutcome }>;
 }
 
 function unavailableMessage(status: string, subject: "转写" | "寻迹") {
@@ -183,8 +184,8 @@ function Notebook() {
   const requestTranscription = async (image: InkImage) => {
     try {
       const result = await postJson("/api/transcribe", { image });
-      if (result.status === "ok" && result.transcription?.trim()) {
-        setPendingTranscription({ image, text: result.transcription.trim(), isFixture: result.fixture === true });
+      if (result.status === "ok" && result.transcription?.text) {
+        setPendingTranscription({ image, text: result.transcription.text, isFixture: result.providerStatus === "fixture" });
       } else {
         setSystemNote(unavailableMessage(result.status, "转写"));
       }
