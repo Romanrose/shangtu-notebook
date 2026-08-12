@@ -16,6 +16,24 @@ type PendingTranscription = { text: string; candidates: string[]; image: InkImag
 type PageRecord = { ink: string | null; inkBounds: InkBounds | null; outcome: TraceOutcome | null; isCollected: boolean; transcription: PendingTranscription | null };
 
 const INK_CAPTURE_PADDING = 18;
+const isTranscriptionExperiment = new URLSearchParams(window.location.search).get("experiment") === "transcription";
+
+function downloadInkSample(image: InkImage, pageIndex: number) {
+  const encoded = image.data.split(",", 2)[1] ?? "";
+  const binary = atob(encoded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const objectUrl = URL.createObjectURL(new Blob([bytes], { type: image.mimeType }));
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  link.download = `shangtu-ink-page-${String(pageIndex + 1).padStart(2, "0")}-${stamp}.png`;
+  link.href = objectUrl;
+  document.body.append(link);
+  link.click();
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }, 1000);
+}
 
 async function postJson(path: string, body: unknown) {
   const response = await fetch(path, {
@@ -55,6 +73,7 @@ function Notebook() {
   const [showTrace, setShowTrace] = useState(false);
   const [pages, setPages] = useState<PageRecord[]>([{ ink: null, inkBounds: null, outcome: null, isCollected: false, transcription: null }]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [experimentSample, setExperimentSample] = useState<InkImage | null>(null);
 
   const rememberPage = () => {
     const ink = hasInkRef.current ? canvasRef.current?.toDataURL() ?? null : null;
@@ -147,6 +166,7 @@ function Notebook() {
     setInkState("rest");
     setOutcome(null);
     setPendingTranscription(null);
+    setExperimentSample(null);
     setSystemNote(null);
     setShowTrace(false);
     setIsCollected(false);
@@ -234,6 +254,7 @@ function Notebook() {
       setSystemNote("这页还没有可供转写的笔迹。");
       return;
     }
+    if (isTranscriptionExperiment) setExperimentSample(image);
     // Keep the local awakening legible before any service response can replace it.
     resultTimerRef.current = window.setTimeout(() => void requestTranscription(image), 480);
   };
@@ -258,6 +279,7 @@ function Notebook() {
     setInkState("rest");
     setOutcome(null);
     setPendingTranscription(null);
+    setExperimentSample(null);
     setSystemNote(null);
     setIsCollected(false);
     setShowTrace(false);
@@ -272,6 +294,7 @@ function Notebook() {
     setHasInk(Boolean(next.ink));
     setOutcome(next.outcome);
     setPendingTranscription(next.transcription);
+    setExperimentSample(null);
     setSystemNote(null);
     setIsCollected(next.isCollected);
     setShowTrace(false);
@@ -298,6 +321,7 @@ function Notebook() {
       {outcome && !isCollected && <div className="relation-trail" aria-hidden="true"><i /><i /><i /></div>}
       <canvas ref={canvasRef} className="ink-canvas" onPointerDown={begin} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} />
       {(inkState === "awakening" || inkState === "reading") && <aside className="awakening" aria-live="polite"><span className="ink-orb" />{inkState === "awakening" ? "识字中" : "寻人地 · 核对出处"}</aside>}
+      {isTranscriptionExperiment && experimentSample && <aside className="experiment-export"><span className="note-seal">样</span><p>当前裁剪笔迹已准备好，可保存到本机实验目录。</p><button onClick={() => downloadInkSample(experimentSample, pageIndex)}>下载样本 PNG</button></aside>}
       {pendingTranscription && !outcome && <TranscriptionNote transcription={pendingTranscription} onChange={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onChoose={(text) => setPendingTranscription((current) => current ? { ...current, text } : current)} onConfirm={confirmTranscription} />}
       {systemNote && !outcome && <aside className="margin-note service-note"><span className="note-seal">记</span><p>{systemNote}</p></aside>}
       {outcome && <MarginNotes outcome={outcome} showTrace={showTrace} onTrace={() => setShowTrace((shown) => !shown)} />}
