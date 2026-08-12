@@ -216,6 +216,13 @@ const publicComparison = compareTranscriptionReports([{ ...comparisonFixture, ev
 if (publicComparison.decision.status !== "insufficient_evidence" || publicComparison.providers.some((entry) => entry.rankable)) throw new Error("公开样本比较错误地开启了生产 provider 排名。");
 const consentedComparison = compareTranscriptionReports([comparisonFixture], { evidence: "consented_user" });
 if (consentedComparison.decision.recommendedProvider !== "paddleocr" || !consentedComparison.providers.every((entry) => entry.rankable)) throw new Error("同 cohort 用户样本比较没有按 CER 和稳定率选出候选。");
+const consentedTiming = { schema: "shangtu-transcription-timing-summary-v1", trials: 2, sampleIdCoverage: 1, sampleIds: ["a".repeat(12), "b".repeat(12)], byProviderStatus: [{ provider: "paddleocr", providerStatus: "ready", status: "ok", trials: 2, confirmation: { count: 2, p50Ms: 100, p95Ms: 120 }, confirmationAvailableRate: 1, editedConfirmationRate: 0.5 }] };
+const timingFixture = { ...consentedTiming, sampleIds: ["a", "b"] };
+try { compareTranscriptionReports([comparisonFixture], { evidence: "consented_user", timingSummaries: [timingFixture] }); throw new Error("timing summary 接受了非 12 位或错位 sampleId。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("sampleId")) throw error; }
+const matchingTiming = { ...consentedTiming, sampleIds: ["a", "b"].map((id) => id.repeat(12)) };
+const timedComparisonFixture = { ...comparisonFixture, reports: comparisonFixture.reports.map((entry) => ({ ...entry, results: entry.results.map((result, index) => ({ ...result, id: ["a", "b"][index].repeat(12) })) })) };
+const timedComparison = compareTranscriptionReports([timedComparisonFixture], { evidence: "consented_user", timingSummaries: [{ ...matchingTiming, sampleIds: ["a", "b"].map((id) => id.repeat(12)) }] });
+if (timedComparison.providers[0].confirmationAvailableRate !== 1 || timedComparison.providers[0].editedConfirmationRate !== 0.5) throw new Error("timing summary 没有与 provider 质量报告合并。");
 try { compareTranscriptionReports([{ ...comparisonFixture, evidence: "unknown" }], { evidence: "consented_user" }); throw new Error("比较器允许把未知报告重标成用户样本。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("不一致")) throw error; }
 const unconfirmedComparison = compareTranscriptionReports([{ ...comparisonFixture, consent: undefined }]);
 if (unconfirmedComparison.providers.some((entry) => entry.rankable) || unconfirmedComparison.decision.recommendedProvider !== null) throw new Error("未确认授权的报告错误地进入 provider 排名。");

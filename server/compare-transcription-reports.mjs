@@ -7,6 +7,16 @@ function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function validateTimingSummary(summary) {
+  if (!summary || summary.schema !== "shangtu-transcription-timing-summary-v1" || !Number.isInteger(summary.trials) || summary.trials < 1 || !Array.isArray(summary.sampleIds) || summary.sampleIdCoverage !== 1 || new Set(summary.sampleIds).size !== summary.sampleIds.length || summary.sampleIds.some((id) => typeof id !== "string" || !/^[A-Za-z0-9]{12}$/.test(id)) || !Array.isArray(summary.byProviderStatus)) {
+    throw new Error("timing summary 必须完整覆盖唯一的 12 位 sampleId，且使用有效 schema。");
+  }
+  for (const group of summary.byProviderStatus) {
+    if (typeof group?.provider !== "string" || !Number.isInteger(group.trials) || group.trials < 1 || !group.confirmation || !Number.isInteger(group.confirmation.count) || group.confirmation.count < 0 || !finite(group.confirmationAvailableRate) || group.confirmationAvailableRate < 0 || group.confirmationAvailableRate > 1 || (group.editedConfirmationRate !== null && (!finite(group.editedConfirmationRate) || group.editedConfirmationRate < 0 || group.editedConfirmationRate > 1))) throw new Error("timing summary 缺少有效 provider 确认/修改率。");
+  }
+  return summary;
+}
+
 function validateReport(report) {
   if (!report || !Array.isArray(report.reports) || !report.reports.length) throw new Error("比较输入必须包含非空 reports 数组。");
   if (report.evidence !== undefined && !EVIDENCE_VALUES.has(report.evidence)) throw new Error("benchmark 报告 evidence 无效。");
@@ -24,7 +34,7 @@ function validateReport(report) {
   return report;
 }
 
-function compareTranscriptionReports(reports, { evidence } = {}) {
+function compareTranscriptionReports(reports, { evidence, timingSummaries = [] } = {}) {
   if (!Array.isArray(reports) || !reports.length) throw new Error("至少需要一份 provider 报告。");
   const validated = reports.map(validateReport);
   const reportEvidences = new Set(validated.map((report) => report.evidence ?? "unknown"));
@@ -41,25 +51,51 @@ function compareTranscriptionReports(reports, { evidence } = {}) {
   if (cohorts.size !== 1) throw new Error("provider 报告必须使用相同 samples、runs 和 warmup，不能混合 cohort。");
   const sampleSets = new Set(validated.flatMap((report) => report.reports.map((entry) => JSON.stringify(entry.results.map((result) => result.id)))));
   if (sampleSets.size !== 1) throw new Error("provider 报告必须使用相同且顺序一致的样本 id，不能混合 cohort。");
+  if (!Array.isArray(timingSummaries)) throw new Error("timingSummaries 必须是数组。");
+  const benchmarkSampleIds = validated[0].reports[0].results.map((result) => result.id);
+  const timingByProvider = new Map();
+  for (const rawSummary of timingSummaries) {
+    const summary = validateTimingSummary(rawSummary);
+    if (JSON.stringify(summary.sampleIds) !== JSON.stringify(benchmarkSampleIds)) throw new Error("timing summary 必须使用与 benchmark 相同且顺序一致的 sampleId。");
+    const providerGroups = new Map();
+    for (const group of summary.byProviderStatus) {
+      const current = providerGroups.get(group.provider) ?? { trials: 0, confirmationCount: 0, editedCount: 0, editedKnown: true };
+      current.trials += group.trials;
+      current.confirmationCount += group.confirmation.count;
+      if (group.editedConfirmationRate === null) current.editedKnown = current.editedKnown && group.confirmation.count === 0;
+      else current.editedCount += group.editedConfirmationRate * group.confirmation.count;
+      providerGroups.set(group.provider, current);
+    }
+    for (const [provider, metrics] of providerGroups) {
+      if (timingByProvider.has(provider)) throw new Error("timing summary 不能重复提供同一 provider。");
+      timingByProvider.set(provider, {
+        confirmationAvailableRate: metrics.trials ? metrics.confirmationCount / metrics.trials : null,
+        editedConfirmationRate: metrics.confirmationCount && metrics.editedKnown ? metrics.editedCount / metrics.confirmationCount : null,
+      });
+    }
+  }
   const entries = validated.flatMap((report) => report.reports.map((entry) => {
     const qualityAvailable = finite(entry.summary.meanCharacterErrorRate) && finite(entry.summary.sampleExactStableRate) && finite(entry.summary.sampleCandidateHitStableRate);
+    const timing = timingByProvider.get(entry.provider) ?? null;
     return {
       provider: entry.provider,
       samples: entry.samples,
       runs: entry.runs,
       warmup: entry.warmup,
       evidence: reportEvidence,
-      rankable: reportEvidence === "consented_user" && consent === "confirmed" && qualityAvailable,
+      rankable: reportEvidence === "consented_user" && consent === "confirmed" && qualityAvailable && (!timingSummaries.length || timing?.confirmationAvailableRate !== null && timing?.editedConfirmationRate !== null),
       meanOkRate: entry.summary.meanOkRate,
       meanCharacterErrorRate: qualityAvailable ? entry.summary.meanCharacterErrorRate : null,
       sampleExactStableRate: qualityAvailable ? entry.summary.sampleExactStableRate : null,
       sampleCandidateHitStableRate: qualityAvailable ? entry.summary.sampleCandidateHitStableRate : null,
       meanP50Ms: finite(entry.summary.meanP50Ms) ? entry.summary.meanP50Ms : null,
       meanP95Ms: finite(entry.summary.meanP95Ms) ? entry.summary.meanP95Ms : null,
+      confirmationAvailableRate: timing?.confirmationAvailableRate ?? null,
+      editedConfirmationRate: timing?.editedConfirmationRate ?? null,
       statusCounts: entry.summary.statusCounts,
     };
   }));
-  const ranked = entries.filter((entry) => entry.rankable).sort((left, right) => (left.meanCharacterErrorRate - right.meanCharacterErrorRate) || (right.sampleExactStableRate - left.sampleExactStableRate) || (left.meanP50Ms - right.meanP50Ms));
+  const ranked = entries.filter((entry) => entry.rankable).sort((left, right) => (left.meanCharacterErrorRate - right.meanCharacterErrorRate) || (right.sampleExactStableRate - left.sampleExactStableRate) || (left.editedConfirmationRate - right.editedConfirmationRate) || (left.meanP50Ms - right.meanP50Ms));
   return {
     schema: "shangtu-transcription-comparison-v1",
     evidence: reportEvidence,
@@ -74,23 +110,26 @@ function parseArgs(argv) {
   const inputs = [];
   let output;
   let evidence;
+  const timingInputs = [];
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--input" && argv[index + 1]) inputs.push(argv[++index]);
+    else if (argv[index] === "--timing" && argv[index + 1]) timingInputs.push(argv[++index]);
     else if (argv[index] === "--output" && argv[index + 1]) output = argv[++index];
     else if (argv[index] === "--evidence" && argv[index + 1]) evidence = argv[++index];
-    else throw new Error("用法：--input report-a.json [--input report-b.json] [--evidence public_casia|consented_user]");
+    else throw new Error("用法：--input report-a.json [--input report-b.json] [--timing timing-summary.json] [--evidence public_casia|consented_user]");
   }
   if (!inputs.length) throw new Error("至少需要一个 --input provider 报告。");
   if (evidence !== undefined && !EVIDENCE_VALUES.has(evidence)) throw new Error("--evidence 必须是 unknown、public_casia 或 consented_user。");
-  return { inputs, output, evidence };
+  return { inputs, timingInputs, output, evidence };
 }
 
 export { compareTranscriptionReports, validateReport };
 
 if (import.meta.main) {
-  const { inputs, output, evidence } = parseArgs(process.argv.slice(2));
+  const { inputs, timingInputs, output, evidence } = parseArgs(process.argv.slice(2));
   const reports = await Promise.all(inputs.map(async (input) => JSON.parse(await readFile(input, "utf8"))));
-  const comparison = compareTranscriptionReports(reports, { evidence });
+  const timingSummaries = await Promise.all(timingInputs.map(async (input) => JSON.parse(await readFile(input, "utf8"))));
+  const comparison = compareTranscriptionReports(reports, { evidence, timingSummaries });
   const serialized = `${JSON.stringify(comparison, null, 2)}\n`;
   if (output) await writeFile(output, serialized, "utf8");
   console.log(serialized.trim());
