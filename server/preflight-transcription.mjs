@@ -43,10 +43,10 @@ export function validateTranscriptionCohort({ manifest, timingPayloads, provider
     seenTimingIds.add(payload.sampleId);
     const result = payload.timings.find((timing) => timing.event === "transcription_result");
     const confirmation = payload.timings.find((timing) => timing.event === "transcription_confirmed");
+    if (provider !== undefined && result?.provider !== undefined && result.provider !== provider) throw new Error("timing provider 与 preflight provider 不一致。");
     if (result?.status === "ok") {
       resultCount += 1;
       if (!result.provider || !PROVIDER_PATTERN.test(result.provider)) throw new Error("成功 transcription_result 必须包含有效 provider 标签。");
-      if (provider !== undefined && result.provider !== provider) throw new Error("timing provider 与 preflight provider 不一致。");
       providerLabels.add(result.provider);
     }
     if (confirmation) {
