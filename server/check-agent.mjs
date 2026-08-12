@@ -14,7 +14,7 @@ import { createTranscriptionManifest, sampleIdFromInkFile } from "./prepare-tran
 import { validateConsentedUserCases } from "./transcription-manifest-contract.mjs";
 import { summarizeTranscriptionTimings } from "./summarize-transcription-timings.mjs";
 import { compareTranscriptionReports } from "./compare-transcription-reports.mjs";
-import { validateTranscriptionCohort } from "./preflight-transcription.mjs";
+import { orderTimingPayloadsByManifest, validateTranscriptionCohort } from "./preflight-transcription.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
@@ -216,6 +216,10 @@ const preflightResult = validateTranscriptionCohort({
   provider: "paddleocr",
 });
 if (preflightResult.status !== "ready" || !preflightResult.comparisonReady || preflightResult.confirmationAvailableRate !== 1 || preflightResult.editedConfirmationRate !== 1 / 2) throw new Error("最终实验 preflight 没有验证样本配对、provider 归因和确认率。");
+const unorderedTimingPayloads = [...preflightResult.sampleIds].reverse().map((sampleId, index) => ({ schema: "shangtu-transcription-timing-v1", sampleId, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100 + index, status: "ok", providerStatus: "ready", provider: "paddleocr" }, { event: "transcription_confirmed", elapsedMs: 200 + index, edited: false }] }));
+if (orderTimingPayloadsByManifest(unorderedTimingPayloads, preflightResult.sampleIds).map((payload) => payload.sampleId).join(",") !== preflightResult.sampleIds.join(",")) throw new Error("timing 目录模式没有按 manifest sampleId 自动配对。");
+try { orderTimingPayloadsByManifest(unorderedTimingPayloads.slice(0, 1), preflightResult.sampleIds); throw new Error("timing 目录模式接受了缺少样本的集合。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("完整覆盖")) throw error; }
+try { orderTimingPayloadsByManifest([...unorderedTimingPayloads, unorderedTimingPayloads[0]], preflightResult.sampleIds); throw new Error("timing 目录模式接受了重复 sampleId。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("重复")) throw error; }
 const incompletePreflight = validateTranscriptionCohort({ manifest: [{ id: preflightIds[0], expected: "李白", imagePath: "a.png", metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } }], timingPayloads: [{ schema: "shangtu-transcription-timing-v1", sampleId: preflightIds[0], timings: [{ event: "pen_up", elapsedMs: 0 }] }] });
 if (incompletePreflight.comparisonReady || incompletePreflight.status !== "needs_result_or_confirmation") throw new Error("最终实验 preflight 接受了缺少成功结果/确认的样本。");
 try { validateTranscriptionCohort({ manifest: preflightIds.map((id) => ({ id, expected: "李白", imagePath: `${id}.png`, metadata: { evidence: "consented_user", cohortId: "user-cohort-a", consent: "confirmed" } })), timingPayloads: preflightIds.map((sampleId) => ({ schema: "shangtu-transcription-timing-v1", sampleId, timings: [{ event: "pen_up", elapsedMs: 0 }, { event: "transcription_result", elapsedMs: 100, status: "ok", providerStatus: "ready" }] })) }); throw new Error("最终实验 preflight 接受了缺少 provider 的成功结果。"); } catch (error) { if (!(error instanceof Error) || !error.message.includes("时延事件")) throw error; }

@@ -1,4 +1,4 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import { validateTimingPayload } from "./summarize-transcription-timings.mjs";
 
@@ -72,6 +72,21 @@ export function validateTranscriptionCohort({ manifest, timingPayloads, provider
   };
 }
 
+export function orderTimingPayloadsByManifest(timingPayloads, sampleIds) {
+  if (!Array.isArray(timingPayloads) || !Array.isArray(sampleIds) || !sampleIds.length) throw new Error("timing 文件和 manifest sampleId 必须是非空数组。");
+  const manifestIds = new Set(sampleIds);
+  const bySampleId = new Map();
+  for (const payload of timingPayloads) {
+    validateTimingPayload(payload);
+    if (typeof payload.sampleId !== "string" || !SAMPLE_ID_PATTERN.test(payload.sampleId)) throw new Error("timing 文件缺少有效 sampleId。");
+    if (!manifestIds.has(payload.sampleId)) throw new Error("timing 文件包含 manifest 之外的 sampleId。");
+    if (bySampleId.has(payload.sampleId)) throw new Error("timing 文件包含重复 sampleId。");
+    bySampleId.set(payload.sampleId, payload);
+  }
+  if (bySampleId.size !== sampleIds.length || sampleIds.some((sampleId) => !bySampleId.has(sampleId))) throw new Error("timing 文件必须完整覆盖 manifest 的 sampleId。");
+  return sampleIds.map((sampleId) => bySampleId.get(sampleId));
+}
+
 async function loadManifest(manifestPath) {
   const manifestRoot = resolve(dirname(manifestPath));
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -84,29 +99,42 @@ async function loadManifest(manifestPath) {
   return manifest;
 }
 
+async function loadTimingDirectory(timingDirectoryPath) {
+  const directory = resolve(timingDirectoryPath);
+  const entries = await readdir(directory, { withFileTypes: true });
+  if (!entries.length) throw new Error("--timing-dir 必须包含 timing JSON 文件。");
+  if (entries.some((entry) => !entry.isFile() || extname(entry.name).toLowerCase() !== ".json")) throw new Error("--timing-dir 只接受顶层 JSON 文件，不接受其他文件或子目录。");
+  return Promise.all(entries.sort((left, right) => left.name.localeCompare(right.name)).map(async (entry) => JSON.parse(await readFile(resolve(directory, entry.name), "utf8"))));
+}
+
 function parseArgs(argv) {
   let manifestPath;
   let output;
   let provider;
   const timingPaths = [];
+  let timingDirectory;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--manifest" && argv[index + 1]) manifestPath = argv[++index];
     else if (argv[index] === "--timing" && argv[index + 1]) timingPaths.push(argv[++index]);
+    else if (argv[index] === "--timing-dir" && argv[index + 1]) timingDirectory = argv[++index];
     else if (argv[index] === "--provider" && argv[index + 1]) provider = argv[++index];
     else if (argv[index] === "--output" && argv[index + 1]) output = argv[++index];
-    else throw new Error("用法：--manifest manifest.json --timing timing-a.json [--timing timing-b.json] [--provider paddleocr] [--output report.json]");
+    else throw new Error("用法：--manifest manifest.json (--timing timing-a.json [--timing timing-b.json] | --timing-dir timing-directory) [--provider paddleocr] [--output report.json]");
   }
-  if (!manifestPath || !timingPaths.length) throw new Error("必须提供 --manifest 和至少一个 --timing；不会读取默认目录。");
-  return { manifestPath, timingPaths, provider, output };
+  if (!manifestPath || (!timingPaths.length && !timingDirectory) || (timingPaths.length && timingDirectory)) throw new Error("必须提供 --manifest 和 --timing 或 --timing-dir（二选一）；不会读取默认目录。");
+  return { manifestPath, timingPaths, timingDirectory, provider, output };
 }
 
 export { validateManifest };
 
 if (import.meta.main) {
-  const { manifestPath, timingPaths, provider, output } = parseArgs(process.argv.slice(2));
+  const { manifestPath, timingPaths, timingDirectory, provider, output } = parseArgs(process.argv.slice(2));
   const manifest = await loadManifest(manifestPath);
-  const timingPayloads = await Promise.all(timingPaths.map(async (path) => JSON.parse(await readFile(resolve(path), "utf8"))));
-  const result = validateTranscriptionCohort({ manifest, timingPayloads, provider });
+  const { ids } = validateManifest(manifest);
+  const timingPayloads = timingDirectory
+    ? await loadTimingDirectory(timingDirectory)
+    : await Promise.all(timingPaths.map(async (path) => JSON.parse(await readFile(resolve(path), "utf8"))));
+  const result = validateTranscriptionCohort({ manifest, timingPayloads: orderTimingPayloadsByManifest(timingPayloads, ids), provider });
   const serialized = `${JSON.stringify(result, null, 2)}\n`;
   if (output) await writeFile(resolve(output), serialized, "utf8");
   console.log(serialized.trim());
