@@ -130,5 +130,7 @@ cd /Users/romanrose/Project/saber-pi-experiment
 ## 当前缺口与下一步
 
 - 当前 JS harness 和 Dart smoke 已证明 bridge/合同顺序；Saber 的编辑器 adapter 已通过定向 `flutter analyze`，但尚未完成真实设备上的 Flutter UI 端到端演示。本轮没有向 Saber 上游远程推送。
+- 已启动当前仓库的 fixture bridge，并用真实 HTTP 请求验证 `/transcribe` → 可编辑转写、`/seek` → `evidence` 两个 live 路径；返回均明确 `originalInk: "retained_by_saber"`。
+- 已尝试在独立 Saber 工作区启动 macOS Flutter 目标，但本机缺少 `xcodebuild`，因此停在 Xcode 依赖解析阶段；没有安装工具或生成新的平台工程。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- 下一步最小行动：在独立工作区启动本地 fixture bridge，再运行 Saber 的 Flutter web/桌面开发构建，手写一段笔迹并确认页边“识字中 → 可编辑转写 → 有证据/有歧义/有缺口”；先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：在具备 Xcode 或 Android/华为平板运行目标的环境中，启动独立 Saber 实验分支和本地 fixture bridge，实际手写一段笔迹并确认页边“识字中 → 可编辑转写 → 有证据/有歧义/有缺口”；先不写 `.sbn2`、同步协议或 Pi 工具代码。
