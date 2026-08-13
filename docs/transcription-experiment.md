@@ -322,6 +322,18 @@ PaddleOCR-VL 的 10 次均为 `timed_out`，没有把空结果计算成 CER；�
 
 严格比较输出 `public_casia / insufficient_evidence / recommendedProvider=null`。因此本轮只确认了可复现的质量—延迟差异：PaddleOCR-VL 的 CER 最低但 p50 约为 PaddleOCR 的 9.8 倍，Tesseract 最快但质量和可用率不足；不能据此替代同意用户的平板真实笔迹实验。报告只保留在本机 `/tmp/shangtu-casia-public-provenance-*-r2.json`，未提交仓库。
 
+### 最小公开数据复跑（2026-08-13）
+
+为把当前实验真正跑通，又从官方 `WPTT2.2-Test.zip` 重新抽取 741–750 共 10 位书写者的 `P14` 第一条有效行；每位书写者 1 条、共 10 条真实中文手写文本，统一使用 `scale=1.5`、同一 manifest、`warmup=1`、`runs=3` 和 `runId=casia-experiment-20260813`。本轮服务环境为 macOS ARM64 CPU，Paddle 3.3.1 / PaddleOCR 3.3.2 / PaddleX 3.3.13，Tesseract 5.5.3；三份报告的样本 ID、cohort、预处理和运行参数均一致。
+
+| Provider | 可用率 | CER | exact / 稳定候选命中 | p50 / p95 |
+| --- | ---: | ---: | ---: | ---: |
+| PaddleOCR | 30/30 | 0.5458 | 0/10 / 0/10 | 635.8 / 678.6 ms |
+| Tesseract (`chi_sim`) | 30/30 | 1.2544 | 0/10 / 0/10 | 138.9 / 187.2 ms |
+| PaddleOCR-VL | 0/30 | 不适用 | 不适用 | 8064.1 / 8257.4 ms |
+
+本轮说明：PaddleOCR 是当前三个候选中唯一同时具有可用结果和相对可接受字符接近度的基线；Tesseract 只能作为速度下限，中文手写质量不足；PaddleOCR-VL 在本机 CPU 和项目 8 秒服务边界内全部超时，因此当前部署不能满足“停笔后出现可编辑转写”的体验门槛。严格比较器仍输出 `public_casia / insufficient_evidence / recommendedProvider=null`；这是公开数据上的工程筛选结果，不是生产 provider 选择。原始 PNG、manifest 和报告保留在本机 `/tmp/shangtu-casia-*`，未提交仓库。
+
 ### 采样路径 UI smoke（2026-08-13）
 
 使用本地浏览器模拟两段短笔划验证边界：`/?experiment=transcription` 在书写并停笔后显示匿名实验导出旁批，可下载当前样本 PNG 和时延 JSON；默认 `/?demo=evidence` 不显示实验导出控件；切换到“静读”后继续书写并等待，不显示停笔反馈或转写旁批。此次运行未配置视觉 provider，因此实验页显示安全降级提示；笔划由浏览器 CUA 模拟，不代表华为平板触控笔/手指真机通过，也未将其样本或报告提交仓库。
