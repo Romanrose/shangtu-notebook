@@ -53,6 +53,16 @@ node spikes/saber-pi/bridge.mjs
 
 它只开放两个 POST 路径，默认不读取任何模型、Pi、CNKGraph 或同步凭据，也不访问网络。
 
+## Client adapter harness
+
+`client.mjs` 是未来 Flutter adapter 的最小行为合同，不是 Saber 代码。它通过注入的 transport 调用 bridge，并把状态限制为：`rest`、`awakening`、`awaiting_confirmation`、`ready`、`quiet`。运行：
+
+```bash
+npm run check:saber-spike-client
+```
+
+该 harness 验证本地苏醒回调在任何 transport 调用之前发生；转写结果只进入待确认派生层；确认前不能寻迹；寻迹后原始 PNG 引用仍由 Saber 侧持有；静读不调用 transport。未来在独立 Saber fork 中实现 Dart 版本时，应保持相同顺序，但由 Saber 的页面/笔迹生命周期和 Flutter 状态管理承载。
+
 ## Bridge 合同
 
 请求共有字段：
