@@ -116,7 +116,7 @@ cd /Users/romanrose/Project/saber-pi-experiment
   --packages=.dart_tool/package_config.json tool/check_pi_companion_live.dart
 ```
 
-该 live smoke 直接验证 Dart client 与 Node bridge 的 UTF-8 请求/响应、transcribe 不携带确认文本、seek 才携带用户确认文本、无 `Authorization` 头、PNG data URL、证据/歧义/缺口三分支和静读边界。
+该 live smoke 直接验证 Dart client 与 Node bridge 的 UTF-8 请求/响应、成功响应的 schema/页 ID/笔迹段 ID/阶段绑定、transcribe 不携带确认文本、seek 才携带用户确认文本、无 `Authorization` 头、PNG data URL、证据/歧义/缺口三分支和静读边界。
 
 ## Bridge 合同
 
