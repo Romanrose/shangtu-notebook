@@ -12,6 +12,7 @@
     "check:agent": "node server/check-agent.mjs",
     "check:saber-spike": "node spikes/saber-pi/check-fixture.mjs",
     "check:saber-spike-client": "node spikes/saber-pi/check-client.mjs",
+    "check:saber-isolation": "node spikes/saber-pi/check-isolation.mjs",
     "bench:transcription": "node server/bench-transcription.mjs",
     "prepare:transcription-manifest": "node server/prepare-transcription-manifest.mjs",
     "prepare:transcription-casia": "python3 server/prepare-casia-wptt-samples.py",
