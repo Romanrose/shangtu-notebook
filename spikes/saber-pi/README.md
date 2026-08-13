@@ -102,7 +102,7 @@ cd /Users/romanrose/Project/saber-pi-experiment
   --packages=.dart_tool/package_config.json tool/check_pi_companion.dart
 ```
 
-它验证本地苏醒、确认门、原笔迹保留、证据结果和静读零调用。当前 UI 接入仍是开发期 overlay，不写 `.sbn2`。
+它验证本地苏醒、确认门、原笔迹保留、证据结果、静读零调用，以及转写失败后回到可恢复的 `ready` 状态。当前 UI 接入仍是开发期 overlay，不写 `.sbn2`。
 
 ## Bridge 合同
 
