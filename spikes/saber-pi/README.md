@@ -2,6 +2,18 @@
 
 状态：第一条纵切面已完成，fixture-only；这不是 Saber fork，也不是当前 PWA 的迁移分支。
 
+## 先说清楚：当前版本不是 Saber
+
+当前仓库里没有 Saber 的 Flutter 源码、`pubspec.yaml`、Git submodule、编译产物或 GPL-3.0 文件副本。Saber 只被当作外部候选底座调查过；当前可运行的代码全部位于 `spikes/saber-pi/`，是 bridge、fixture 和未来 adapter 的行为合同。
+
+运行以下检查可以确认这个边界：
+
+```bash
+npm run check:saber-isolation
+```
+
+换句话说，现在验证的是“Pi 能否安全接在 Saber 旁边”，不是“我们已经把 Saber 集成进来了”。真正的 Saber 实验版本应在独立的 Saber fork/实验仓库中创建；那个仓库再通过 HTTP/本地受控服务调用这里约定的 bridge，不把 Saber 源码带回本仓库。
+
 ## 结论：先做 companion bridge
 
 本轮选择独立 companion bridge，而不是 fork Saber 或修改 Saber 主仓库：
