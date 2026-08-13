@@ -104,6 +104,20 @@ cd /Users/romanrose/Project/saber-pi-experiment
 
 它验证本地苏醒、确认门、原笔迹保留、证据结果、静读零调用，以及转写失败后回到可恢复的 `ready` 状态。页边 overlay 对三分支分别显示证据正文/来源/路径、歧义说明/候选和证据缺口说明；session 还会丢弃迟到的旧笔迹响应，避免覆盖当前段结果。当前 UI 接入仍是开发期 overlay，不写 `.sbn2`。
 
+跨进程验证需要先在当前仓库启动 fixture bridge：
+
+```bash
+cd /Users/romanrose/Project/shangtu-notebook
+node spikes/saber-pi/bridge.mjs
+
+# 另一个终端
+cd /Users/romanrose/Project/saber-pi-experiment
+./submodules/flutter/bin/cache/dart-sdk/bin/dart \
+  --packages=.dart_tool/package_config.json tool/check_pi_companion_live.dart
+```
+
+该 live smoke 直接验证 Dart client 与 Node bridge 的 UTF-8 请求/响应、证据/歧义/缺口三分支和静读边界。
+
 ## Bridge 合同
 
 请求共有字段：
