@@ -14,6 +14,27 @@ npm run check:saber-isolation
 
 换句话说，现在验证的是“Pi 能否安全接在 Saber 旁边”，不是“我们已经把 Saber 集成进来了”。真正的 Saber 实验版本应在独立的 Saber fork/实验仓库中创建；那个仓库再通过 HTTP/本地受控服务调用这里约定的 bridge，不把 Saber 源码带回本仓库。
 
+## 独立 Saber 工作区
+
+当前已在本仓库之外建立独立工作区：
+
+```text
+/Users/romanrose/Project/saber-pi-experiment
+branch: experiment/pi-companion
+upstream: https://github.com/saber-notes/saber.git
+commit: 34c57e51fb97ad23b781d7f681beaa821746b8ef
+```
+
+该目录包含 Saber 自己的 GPL-3.0 源码和 Flutter submodule，但不属于本仓库，不会被当前仓库的 Git 提交或构建包含。可在另一台机器上复现为：
+
+```bash
+git clone https://github.com/saber-notes/saber.git saber-pi-experiment
+cd saber-pi-experiment
+git switch -c experiment/pi-companion
+```
+
+当前机器没有 Flutter/Dart SDK，因此暂不在这个工作区提交 Dart adapter。已确认的最小挂接位置是：`Editor.onDrawEnd` 作为停笔事件入口，`EditorExporter.screenshotPage` 作为当前页 PNG 导出入口；`EditorPage` / `Stroke` / `EditorHistory` 继续由 Saber 自己管理。未来 adapter 只把 PNG、页 ID、笔迹段 ID 和用户确认文本发送到本 Spike bridge，不接管这些确定性能力。
+
 ## 结论：先做 companion bridge
 
 本轮选择独立 companion bridge，而不是 fork Saber 或修改 Saber 主仓库：
@@ -102,4 +123,4 @@ npm run check:saber-spike-client
 
 - 当前 harness 证明的是 bridge/合同顺序，不是实际 Flutter Saber 页的端到端运行；本机没有 Flutter SDK，且本轮明确不修改 Saber 上游。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- 下一步最小行动：在独立 Saber fork/实验仓库中仅增加一个开发期 adapter，把“当前页 PNG 导出 + pen-up 本地状态 + 两个 bridge 请求 + 页边 overlay”接到一个示例编辑页；先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：在具备 Flutter SDK 后，在上述独立工作区的 `experiment/pi-companion` 分支中仅增加一个开发期 adapter，把“当前页 PNG 导出 + pen-up 本地状态 + 两个 bridge 请求 + 页边 overlay”接到一个示例编辑页；先不写 `.sbn2`、同步协议或 Pi 工具代码。
