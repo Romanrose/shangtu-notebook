@@ -1,0 +1,76 @@
+import { createServer } from "node:http";
+import { createSaberPiFixtureHandler, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
+import { runFixtureSeek } from "../../server/fixture-seek.mjs";
+import { fixtureTranscription } from "../../server/transcription-adapter.mjs";
+
+const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,AA==" };
+const events = [];
+let transcribeCalls = 0;
+let seekCalls = 0;
+
+const server = createServer(createSaberPiFixtureHandler({
+  transcribe: async ({ image }) => {
+    transcribeCalls++;
+    if (!events.includes("local_awakening")) throw new Error("local awakening must precede bridge call");
+    return { status: "ok", transcription: { text: fixtureTranscription, candidates: [] }, providerStatus: "fixture", provider: "fixture" };
+  },
+  seek: async ({ transcription, image }) => {
+    seekCalls++;
+    if (!events.includes("transcription_confirmed")) throw new Error("seek must follow confirmation");
+    return runFixtureSeek({ transcription, image });
+  },
+}));
+
+await new Promise((resolve) => server.listen(0, resolve));
+const origin = `http://127.0.0.1:${server.address().port}`;
+const post = (path, body) => fetch(`${origin}${path}`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+}).then(async (response) => ({ status: response.status, body: await response.json() }));
+
+try {
+  const penUpAt = performance.now();
+  events.push("pen_up");
+  events.push("local_awakening");
+  if (performance.now() - penUpAt >= 1000) throw new Error("local awakening exceeded one second");
+  const transcription = await post(SABER_PI_SPIKE_PATHS.transcribe, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk,
+  });
+  if (transcription.status !== 200 || transcription.body.stage !== "transcription" || transcription.body.transcription.text !== fixtureTranscription) throw new Error("fixture transcription vertical slice failed");
+  if (transcription.body.originalInk !== "retained_by_saber") throw new Error("bridge did not preserve Saber ink ownership");
+
+  const missingConfirmation = await post(SABER_PI_SPIKE_PATHS.seek, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk,
+  });
+  if (missingConfirmation.status !== 409 || missingConfirmation.body.status !== "confirmation_required") throw new Error("seek was callable before confirmation");
+
+  events.push("transcription_confirmed");
+  const evidence = await post(SABER_PI_SPIKE_PATHS.seek, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk, confirmedText: fixtureTranscription,
+  });
+  if (evidence.status !== 200 || evidence.body.outcome.kind !== "evidence" || evidence.body.outcome.path.join(" → ") !== "李白 → 作者 → 将进酒" || evidence.body.outcome.source.length !== 1) throw new Error("evidence branch failed");
+
+  const ambiguous = await post(SABER_PI_SPIKE_PATHS.seek, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk, confirmedText: "李贺和长安有什么关联？",
+  });
+  if (ambiguous.status !== 200 || ambiguous.body.outcome.kind !== "ambiguous" || ambiguous.body.outcome.candidates.length < 2) throw new Error("ambiguity branch failed");
+
+  const gap = await post(SABER_PI_SPIKE_PATHS.seek, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk, confirmedText: "珊瑚与唐诗有什么关联？",
+  });
+  if (gap.status !== 200 || gap.body.outcome.kind !== "gap" || !gap.body.outcome.gap.includes("没有这条")) throw new Error("evidence gap branch failed");
+
+  const beforeQuietCalls = { transcribeCalls, seekCalls };
+  const quiet = await post(SABER_PI_SPIKE_PATHS.transcribe, {
+    pageId: "note-01-page-01", strokeSegmentId: "segment-quiet", mode: "quiet", image: tinyInk,
+  });
+  if (quiet.status !== 409 || quiet.body.status !== "quiet_mode_no_seek" || transcribeCalls !== beforeQuietCalls.transcribeCalls || seekCalls !== beforeQuietCalls.seekCalls) throw new Error("quiet mode crossed bridge boundary");
+
+  const forbidden = await fetch(`${origin}/spike/saber-pi/v1/anything`, { method: "POST" });
+  if (forbidden.status !== 404) throw new Error("bridge exposed a non-contract route");
+  if (transcribeCalls !== 1 || seekCalls !== 3) throw new Error("unexpected bridge call count");
+  console.log("Saber Pi spike fixture verified: local awakening, editable transcription, evidence, gap, confirmation, and quiet-mode boundaries.");
+} finally {
+  server.close();
+}
