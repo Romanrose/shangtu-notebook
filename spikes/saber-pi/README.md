@@ -33,7 +33,7 @@ cd saber-pi-experiment
 git switch -c experiment/pi-companion
 ```
 
-当前机器没有 Flutter/Dart SDK，因此暂不在这个工作区提交 Dart adapter。已确认的最小挂接位置是：`Editor.onDrawEnd` 作为停笔事件入口，`EditorExporter.screenshotPage` 作为当前页 PNG 导出入口；`EditorPage` / `Stroke` / `EditorHistory` 继续由 Saber 自己管理。未来 adapter 只把 PNG、页 ID、笔迹段 ID 和用户确认文本发送到本 Spike bridge，不接管这些确定性能力。
+当前机器通过 Saber 自带的 Flutter submodule 已验证 Flutter 3.44.9 / Dart 3.12.2。独立工作区中已增加未推送的 Dart companion adapter：`lib/data/pi_companion/pi_companion_client.dart`、`lib/pages/editor/pi_companion_panel.dart`，并在 `Editor.onDrawEnd` 接入 `EditorExporter.screenshotPage`。这只是外部 GPL 工作区的实验改动，仍没有复制到当前仓库。adapter 只把 PNG、页 ID、笔迹段 ID 和用户确认文本发送到本 Spike bridge，不接管 Saber 的确定性能力。
 
 ## 结论：先做 companion bridge
 
@@ -88,13 +88,21 @@ node spikes/saber-pi/bridge.mjs
 
 ## Client adapter harness
 
-`client.mjs` 是未来 Flutter adapter 的最小行为合同，不是 Saber 代码。它通过注入的 transport 调用 bridge，并把状态限制为：`rest`、`awakening`、`awaiting_confirmation`、`ready`、`quiet`。运行：
+`client.mjs` 是当前 Flutter adapter 的跨语言行为合同；Dart 实现位于独立 Saber 工作区，JS 文件仍保留为当前仓库的轻量合同测试。它通过注入的 transport 调用 bridge，并把状态限制为：`rest`、`awakening`、`awaiting_confirmation`、`ready`、`quiet`。运行：
 
 ```bash
 npm run check:saber-spike-client
 ```
 
-该 harness 验证本地苏醒回调在任何 transport 调用之前发生；转写结果只进入待确认派生层；确认前不能寻迹；寻迹后原始 PNG 引用仍由 Saber 侧持有；静读不调用 transport。未来在独立 Saber fork 中实现 Dart 版本时，应保持相同顺序，但由 Saber 的页面/笔迹生命周期和 Flutter 状态管理承载。
+该 harness 验证本地苏醒回调在任何 transport 调用之前发生；转写结果只进入待确认派生层；确认前不能寻迹；寻迹后原始 PNG 引用仍由 Saber 侧持有；静读不调用 transport。独立工作区的纯 Dart smoke 可运行：
+
+```bash
+cd /Users/romanrose/Project/saber-pi-experiment
+./submodules/flutter/bin/cache/dart-sdk/bin/dart \
+  --packages=.dart_tool/package_config.json tool/check_pi_companion.dart
+```
+
+它验证本地苏醒、确认门、原笔迹保留、证据结果和静读零调用。当前 UI 接入仍是开发期 overlay，不写 `.sbn2`。
 
 ## Bridge 合同
 
@@ -121,6 +129,6 @@ npm run check:saber-spike-client
 
 ## 当前缺口与下一步
 
-- 当前 harness 证明的是 bridge/合同顺序，不是实际 Flutter Saber 页的端到端运行；本机没有 Flutter SDK，且本轮明确不修改 Saber 上游。
+- 当前 JS harness 和 Dart smoke 已证明 bridge/合同顺序；Saber 的编辑器 adapter 已通过定向 `flutter analyze`，但尚未完成真实设备上的 Flutter UI 端到端演示。本轮没有向 Saber 上游远程推送。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- 下一步最小行动：在具备 Flutter SDK 后，在上述独立工作区的 `experiment/pi-companion` 分支中仅增加一个开发期 adapter，把“当前页 PNG 导出 + pen-up 本地状态 + 两个 bridge 请求 + 页边 overlay”接到一个示例编辑页；先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：在独立工作区启动本地 fixture bridge，再运行 Saber 的 Flutter web/桌面开发构建，手写一段笔迹并确认页边“识字中 → 可编辑转写 → 有证据/有歧义/有缺口”；先不写 `.sbn2`、同步协议或 Pi 工具代码。
