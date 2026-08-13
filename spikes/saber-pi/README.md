@@ -145,6 +145,6 @@ cd /Users/romanrose/Project/saber-pi-experiment
 
 - 当前 JS harness 和 Dart smoke 已证明 bridge/合同顺序；Saber 的编辑器 adapter 已通过定向 `flutter analyze`，但尚未完成真实设备上的 Flutter UI 端到端演示。本轮没有向 Saber 上游远程推送。
 - 已启动当前仓库的 fixture bridge，并用真实 HTTP 请求验证 `/transcribe` → 可编辑转写、`/seek` → `evidence` 两个 live 路径；返回均明确 `originalInk: "retained_by_saber"`。
-- 已尝试在独立 Saber 工作区启动 macOS Flutter 目标，但本机缺少 `xcodebuild`，因此停在 Xcode 依赖解析阶段；没有安装工具或生成新的平台工程。
+- 当前机器已有 Xcode 26.6 / `xcodebuild`，但真实 macOS 启动仍未完成：普通 `flutter run -d macos` 被 `com.adilhanney.saber` 的 provisioning profile 阻断；使用 `CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO` 的无签名构建继续验证后，又被 `super_native_extensions` 的 Rust 原生资产阻断，环境中只有 `rustup` 入口而没有可执行 `rustc`。本轮没有修改或提交 Saber 的平台工程生成物。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- 下一步最小行动：在具备 Xcode 或 Android/华为平板运行目标的环境中，启动独立 Saber 实验分支和本地 fixture bridge，实际手写一段笔迹并确认页边“识字中 → 可编辑转写 → 有证据/有歧义/有缺口”；先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：先在独立 Saber 工作区补齐 Rust 1.97.1 的可执行 toolchain，重试无签名 macOS 构建；构建成功后再启动 fixture bridge，实际手写一段笔迹并确认页边“识字中 → 可编辑转写 → 有证据/有歧义/有缺口”。若改用 Android/华为平板目标，则保留同一 bridge 合同；先不写 `.sbn2`、同步协议或 Pi 工具代码。
