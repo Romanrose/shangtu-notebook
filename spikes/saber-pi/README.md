@@ -89,6 +89,15 @@ node spikes/saber-pi/bridge.mjs
 
 它只开放两个 POST 路径，默认不读取任何模型、Pi、CNKGraph 或同步凭据，也不访问网络。
 
+为了在不能修改平板确认文本的自动化演示中核验页边三分支，**仅 fixture bridge** 可由服务端启动参数固定演练结果：
+
+```bash
+SABER_PI_FIXTURE_SCENARIO=ambiguous node spikes/saber-pi/bridge.mjs
+# 或 gap；省略该变量仍按用户确认文本选择 fixture 结果。
+```
+
+该变量不能选择真实模型、图谱、网络或工具，也不会被普通 notebook server 读取；未知值会拒绝启动。
+
 如果受控服务端已按现有转写合同配置好 provider，运维人员才可在 Node 进程中显式选择它：
 
 ```bash
@@ -161,5 +170,5 @@ cd /Users/romanrose/Project/saber-pi-experiment
 - 普通 `flutter run -d macos` 仍会被 `com.adilhanney.saber` 的 provisioning profile 阻断；当前已能启动一个独立工作区生成的 unsigned Debug `Saber.app`，并完成上述 fixture-only UI 演示。可复现的 clean build 仍需整理 Rust 1.97.1 的 PATH/toolchain；本轮没有修改或提交 Saber 的平台工程生成物。
 - 已在 USB 调试授权的华为 `DBY-W09`（Android 12 / API 31）上安装独立 Saber Debug APK；通过 `adb reverse tcp:4175 tcp:4175` 接入 Mac fixture，实际看到可编辑转写，并在确认后看到“有证据”正文、有限路径和来源从页边逐字出现。强制停止并重开独立 Spike 后，临时笔记及其原始笔迹缩略图仍在。另在关闭 fixture bridge 后切至静读模式新增一笔：只显示“只保存笔迹，不调用 Pi”，没有出现识字、确认或桥接错误。通过 ADB 将平板切到 Android `port` 配置后，触摸新增一笔在约 250ms 已显示“识字中”，随后进入确认并显示同一“有证据”页边回应；测试后已恢复原有自动旋转设置。用户已进一步用真实触控笔在横屏、竖屏分别书写，均能在停笔后进入寻迹模式。该次平板验证仍是 fixture-only，尚未替代真实模型质量或正式发布签名流程。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- `有歧义` 与 `有缺口` 已由 Node fixture 和 Dart live smoke 覆盖，但尚未分别在平板 UI 上手工编辑确认文本后录制；它们不能被“有证据”的平板截图替代。
+- `有歧义` 与 `有缺口` 已由 Node fixture、Dart live smoke 和华为平板 UI 覆盖。平板自动化通过仅服务端的固定 fixture scenario 绕过 Android shell 不能注入中文确认文本的限制；它们仍不能被解释为真实实体澄清或真实图谱质量。
 - 下一步最小行动：先确定受控服务端的真实 OCR 供应商和一组获准使用的手写样本，再用现有 adapter 与同一 UI 合同评估识别质量。随后才由服务端配置受限 Pi 模型和搜韵/CNKGraph 网关；先不写 `.sbn2`、同步协议或 Pi 工具代码。

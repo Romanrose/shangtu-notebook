@@ -87,6 +87,37 @@ try {
   });
   if (gap.status !== 200 || gap.body.outcome.kind !== "gap" || !gap.body.outcome.gap.includes("没有这条")) throw new Error("evidence gap branch failed");
 
+  for (const [fixtureScenario, expectedKind] of [["ambiguous", "ambiguous"], ["gap", "gap"]]) {
+    const scenarioServer = createServer(createSaberPiFixtureHandler({ fixtureScenario }));
+    await new Promise((resolve) => scenarioServer.listen(0, resolve));
+    const scenarioOrigin = `http://127.0.0.1:${scenarioServer.address().port}`;
+    try {
+      const scenarioResult = await fetch(`${scenarioOrigin}${SABER_PI_SPIKE_PATHS.seek}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageId: "note-01-page-01",
+          strokeSegmentId: `scenario-${fixtureScenario}`,
+          mode: "seek",
+          image: tinyInk,
+          confirmedText: fixtureTranscription,
+        }),
+      }).then(async (response) => ({ status: response.status, body: await response.json() }));
+      if (scenarioResult.status !== 200 || scenarioResult.body.outcome.kind !== expectedKind) {
+        throw new Error(`fixture scenario ${fixtureScenario} did not select ${expectedKind}`);
+      }
+    } finally {
+      scenarioServer.close();
+    }
+  }
+  let invalidScenarioRejected = false;
+  try {
+    createSaberPiFixtureHandler({ fixtureScenario: "unbounded" });
+  } catch (error) {
+    invalidScenarioRejected = error instanceof Error && error.message === "invalid_fixture_scenario";
+  }
+  if (!invalidScenarioRejected) throw new Error("invalid fixture scenario was accepted");
+
   const beforeQuietCalls = { transcribeCalls, seekCalls };
   const quiet = await post(SABER_PI_SPIKE_PATHS.transcribe, {
     pageId: "note-01-page-01", strokeSegmentId: "segment-quiet", mode: "quiet", image: tinyInk,
@@ -96,7 +127,7 @@ try {
   const forbidden = await fetch(`${origin}/spike/saber-pi/v1/anything`, { method: "POST" });
   if (forbidden.status !== 404) throw new Error("bridge exposed a non-contract route");
   if (transcribeCalls !== 1 || seekCalls !== 3) throw new Error("unexpected bridge call count");
-  console.log("Saber Pi spike fixture verified: provider selection, local awakening, editable transcription, evidence, gap, confirmation, and quiet-mode boundaries.");
+  console.log("Saber Pi spike fixture verified: provider selection, local awakening, editable transcription, evidence, ambiguity, gap, confirmation, quiet-mode boundaries, and fixed test scenarios.");
 } finally {
   server.close();
 }

@@ -5,6 +5,11 @@ import { transcribeInk } from "../../server/transcription-adapter.mjs";
 const MAX_BODY_BYTES = 2_200_000;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,120}$/;
 const BRIDGE_PREFIX = "/spike/saber-pi/v1";
+const FIXTURE_SCENARIO_TRANSCRIPTIONS = Object.freeze({
+  evidence: "李白",
+  ambiguous: "李贺",
+  gap: "珊瑚",
+});
 
 export const SABER_PI_SPIKE_PATHS = Object.freeze({
   transcribe: `${BRIDGE_PREFIX}/transcribe`,
@@ -65,6 +70,13 @@ function bridgeEnvelope(body, stage, result) {
   };
 }
 
+function fixtureScenarioTranscription(scenario) {
+  if (!scenario) return null;
+  const transcription = FIXTURE_SCENARIO_TRANSCRIPTIONS[scenario];
+  if (!transcription) throw new Error("invalid_fixture_scenario");
+  return transcription;
+}
+
 /**
  * Keeps the spike offline unless a server operator explicitly selects an
  * already-supported transcription provider. Provider configuration and its
@@ -88,8 +100,15 @@ export function createSaberPiTranscriber({
  */
 export function createSaberPiFixtureHandler({
   transcribe = createSaberPiTranscriber(),
-  seek = ({ transcription, image }) => runFixtureSeek({ transcription, image }),
+  seek,
+  fixtureScenario = process.env.SABER_PI_FIXTURE_SCENARIO,
 } = {}) {
+  const scenarioTranscription = fixtureScenarioTranscription(fixtureScenario);
+  const fixtureSeek = seek ?? (({ transcription, image }) => runFixtureSeek({
+    transcription: scenarioTranscription ?? transcription,
+    image,
+  }));
+
   return async (request, response, next) => {
     if (request.method !== "POST" || !Object.values(SABER_PI_SPIKE_PATHS).includes(request.url)) {
       if (next) return next();
@@ -109,7 +128,7 @@ export function createSaberPiFixtureHandler({
       if (typeof body.confirmedText !== "string" || !body.confirmedText.trim() || body.confirmedText.length > 240) {
         return writeJson(response, 409, bridgeEnvelope(body, "rejected", { status: "confirmation_required" }));
       }
-      const result = await seek({ transcription: body.confirmedText.trim(), image: body.image });
+      const result = await fixtureSeek({ transcription: body.confirmedText.trim(), image: body.image });
       return writeJson(response, 200, bridgeEnvelope(body, "annotation", result));
     } catch (error) {
       const status = error instanceof Error && error.message === "body_too_large" ? 413 : 400;
