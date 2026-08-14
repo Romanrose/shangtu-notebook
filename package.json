@@ -19,6 +19,7 @@
     "summarize:transcription-timing": "node server/summarize-transcription-timings.mjs",
     "preflight:transcription": "node server/preflight-transcription.mjs",
     "preflight:pi": "node server/preflight-pi-model.mjs",
+    "preflight:services": "node server/preflight-real-services.mjs",
     "compare:transcription": "node server/compare-transcription-reports.mjs"
   },
   "dependencies": {
