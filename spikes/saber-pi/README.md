@@ -143,8 +143,9 @@ cd /Users/romanrose/Project/saber-pi-experiment
 
 ## 当前缺口与下一步
 
-- 当前 JS harness、Dart smoke 和独立 Saber macOS UI 已证明第一条纵切面：在 Saber 页面保留原始笔迹，停笔后进入可编辑转写，确认后在页边显示“有证据”、证据正文、有限路径和来源。本轮没有向 Saber 上游远程推送。
+- 当前 JS harness、Dart smoke、独立 Saber macOS UI 和真实华为平板 UI 已证明第一条纵切面：Saber 页面保留原始笔迹，停笔后进入可编辑转写，确认后在页边显示“有证据”、证据正文、有限路径和来源。本轮没有向 Saber 上游远程推送。
 - 已启动当前仓库的 fixture bridge，并用真实 HTTP 请求验证 `/transcribe` → 可编辑转写、`/seek` → `evidence` 两个 live 路径；返回均明确 `originalInk: "retained_by_saber"`。
 - 普通 `flutter run -d macos` 仍会被 `com.adilhanney.saber` 的 provisioning profile 阻断；当前已能启动一个独立工作区生成的 unsigned Debug `Saber.app`，并完成上述 fixture-only UI 演示。可复现的 clean build 仍需整理 Rust 1.97.1 的 PATH/toolchain；本轮没有修改或提交 Saber 的平台工程生成物。
+- 已在 USB 调试授权的华为 `DBY-W09`（Android 12 / API 31）上安装独立 Saber Debug APK；通过 `adb reverse tcp:4175 tcp:4175` 接入 Mac fixture，实际看到可编辑转写并确认出“有证据”页边回应。该次平板验证仍是 fixture-only，尚未替代真实模型质量或正式发布签名流程。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
-- 下一步最小行动：补齐独立 Saber 工作区的可复现 Rust 1.97.1 toolchain，并在真实华为平板/Android 目标上重复同一验收；随后用同一合同分别跑通“有歧义”和“有缺口”页边分支。先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：在华为平板上用真实触控笔和手指各写一次，横屏/竖屏各验一次停笔反馈与原笔迹保留；随后用同一合同分别跑通“有歧义”和“有缺口”页边分支。先不写 `.sbn2`、同步协议或 Pi 工具代码。
