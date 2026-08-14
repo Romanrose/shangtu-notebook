@@ -4,6 +4,7 @@ import { allowedTools, clarify, createPiNotebookSession, notebookSystemPrompt } 
 import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { createNotebookServer } from "./notebook-server.mjs";
 import { inspectPiModelConfiguration } from "./preflight-pi-model.mjs";
+import { inspectRealServicesConfiguration } from "./preflight-real-services.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
@@ -43,6 +44,25 @@ async function withServer(options, callback) {
 const expected = ["clarify_entity", "retrieve_cnkgraph", "validate_evidence", "compose_annotation"];
 if (JSON.stringify(allowedTools) !== JSON.stringify(expected)) throw new Error("Pi 工具白名单发生漂移。");
 if (inspectPiModelConfiguration({ env: {} }).status !== "pi_unconfigured") throw new Error("Pi 空配置预检错误。");
+const emptyServicesPreflight = inspectRealServicesConfiguration({ env: {} });
+if (emptyServicesPreflight.ocr.status !== "ocr_unconfigured" || emptyServicesPreflight.pi.status !== "pi_unconfigured" || emptyServicesPreflight.graph.status !== "graph_unconfigured" || emptyServicesPreflight.readyForOcrCall || emptyServicesPreflight.readyForSeekCall) throw new Error("真实服务空配置预检错误。");
+const missingHuaweiPreflight = inspectRealServicesConfiguration({ env: { SABER_PI_TRANSCRIPTION_PROVIDER: "huawei-handwriting" } });
+if (missingHuaweiPreflight.ocr.status !== "ocr_auth_or_endpoint_missing") throw new Error("华为 OCR 缺失配置预检错误。");
+const readyServicesPreflight = inspectRealServicesConfiguration({
+  env: {
+    SABER_PI_TRANSCRIPTION_PROVIDER: "huawei-handwriting",
+    HUAWEI_OCR_ENDPOINT: "https://ocr.example.test",
+    HUAWEI_OCR_PROJECT_ID: "project-test",
+    HUAWEI_OCR_AUTH_TOKEN: "server-only-ocr-token",
+    PI_MODEL_PROVIDER: "openai",
+    PI_MODEL_ID: "gpt-4.1",
+    OPENAI_API_KEY: "server-only-pi-token",
+    CNKGRAPH_GATEWAY_ENDPOINT: "https://gateway.example.test/seek",
+    CNKGRAPH_GATEWAY_AUTH_TOKEN: "server-only-graph-token",
+  },
+});
+if (!readyServicesPreflight.readyForOcrCall || !readyServicesPreflight.readyForSeekCall || JSON.stringify(readyServicesPreflight).includes("server-only-")) throw new Error("真实服务预检没有隐藏凭据或未识别完整配置。");
+if (inspectRealServicesConfiguration({ env: { CNKGRAPH_GATEWAY_ENDPOINT: "http://gateway.example.test", CNKGRAPH_GATEWAY_AUTH_TOKEN: "server-only-token" } }).graph.status !== "graph_endpoint_invalid") throw new Error("图谱 gateway 非 HTTPS endpoint 没有被预检拒绝。");
 if (inspectPiModelConfiguration({ provider: "openai", modelId: "not-a-real-model", env: {} }).status !== "pi_model_unknown") throw new Error("Pi 未知模型预检错误。");
 if (inspectPiModelConfiguration({ provider: "openai", modelId: "gpt-4.1", env: {} }).status !== "pi_auth_missing") throw new Error("Pi 缺失认证预检错误。");
 const piReadyPreflight = inspectPiModelConfiguration({ provider: "openai", modelId: "gpt-4.1", env: { OPENAI_API_KEY: "server-only-test-token" } });
