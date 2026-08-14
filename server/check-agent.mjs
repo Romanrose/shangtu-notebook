@@ -6,6 +6,7 @@ import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
+import { invokeHuaweiHandwriting } from "./providers/huawei-handwriting.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
 import { invokePaddleOcrVl } from "./providers/paddleocr-vl.mjs";
 import { invokeTesseract } from "./providers/tesseract.mjs";
@@ -19,6 +20,11 @@ import { createTranscription } from "./transcription-contract.mjs";
 import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
 const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,iVBORw0KGgo=" };
+const sizedPng = Buffer.alloc(24);
+Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(sizedPng);
+sizedPng.writeUInt32BE(100, 16);
+sizedPng.writeUInt32BE(50, 20);
+const sizedInk = { mimeType: "image/png", data: `data:image/png;base64,${sizedPng.toString("base64")}` };
 
 async function withServer(options, callback) {
   const server = createNotebookServer(options);
@@ -103,6 +109,18 @@ const paddleResult = await invokePaddleOcr({ image: tinyInk, endpoint: "http://p
 if (paddleResult?.text !== "李白是谁？" || paddleResult.lines?.[0].box.x !== 0.1) throw new Error("PaddleOCR 响应没有映射为转写合同。");
 const configuredPaddle = await transcribeInk({ image: tinyInk, provider: "paddleocr", modelId: "PP-OCRv5", endpoint: "http://paddle.test/ocr", fetchImpl: async () => ({ ok: true, json: async () => paddleResponse }) });
 if (configuredPaddle.status !== "ok" || configuredPaddle.providerStatus !== "ready" || configuredPaddle.provider !== "paddleocr" || configuredPaddle.transcription?.text !== "李白是谁？") throw new Error("PaddleOCR 没有经过统一转写适配器。");
+const missingHuawei = await transcribeInk({ image: sizedInk, provider: "huawei-handwriting", modelId: "handwriting-v1", huaweiEndpoint: "https://ocr.test" });
+if (missingHuawei.status !== "vision_unconfigured" || missingHuawei.providerStatus !== "unconfigured") throw new Error("华为手写 OCR 缺少服务端鉴权时没有安全降级。");
+const huaweiResponse = { result: { words_block_count: 2, words_block_list: [{ words: "123", confidence: 0.99, location: [[10, 5], [40, 5], [40, 20], [10, 20]] }, { words: "李白", confidence: 0.98, location: [[45, 5], [95, 5], [95, 20], [45, 20]] }] } };
+const huaweiAbortController = new AbortController();
+const huaweiResult = await invokeHuaweiHandwriting({ image: sizedInk, endpoint: "https://ocr.test/", projectId: "project-test", authToken: "server-only-token", charSet: "general", signal: huaweiAbortController.signal, fetchImpl: async (url, options) => {
+  const body = JSON.parse(options.body);
+  if (url !== "https://ocr.test/v2/project-test/ocr/handwriting" || options.method !== "POST" || options.headers["X-Auth-Token"] !== "server-only-token" || options.signal !== huaweiAbortController.signal || body.image !== sizedInk.data.slice("data:image/png;base64,".length) || body.quick_mode !== true || body.char_set !== "general" || body.detect_direction !== false) throw new Error("华为手写 OCR 请求合同或服务端凭据边界错误。");
+  return { ok: true, json: async () => huaweiResponse };
+} });
+if (huaweiResult?.text !== "123李白" || huaweiResult.lines?.length !== 2 || huaweiResult.lines?.[0].box.x !== 0.1 || huaweiResult.lines?.[1].box.width !== 0.5) throw new Error("华为手写 OCR 响应没有映射为统一转写合同。");
+const configuredHuawei = await transcribeInk({ image: sizedInk, provider: "huawei-handwriting", modelId: "handwriting-v1", huaweiEndpoint: "https://ocr.test", huaweiProjectId: "project-test", huaweiAuthToken: "server-only-token", fetchImpl: async () => ({ ok: true, json: async () => huaweiResponse }) });
+if (configuredHuawei.status !== "ok" || configuredHuawei.providerStatus !== "ready" || configuredHuawei.provider !== "huawei-handwriting" || configuredHuawei.transcription?.text !== "123李白") throw new Error("华为手写 OCR 没有经过统一转写适配器。");
 const paddleVlResponse = { result: { dataInfo: { width: 100, height: 50 }, layoutParsingResults: [{ prunedResult: { parsing_res_list: [{ block_content: "李白是谁？", block_bbox: [10, 5, 90, 25] }] } }] } };
 const paddleVlResult = await invokePaddleOcrVl({ image: tinyInk, endpoint: "http://paddle-vl.test/layout-parsing", fetchImpl: async (url, options) => {
   if (url !== "http://paddle-vl.test/layout-parsing" || options.method !== "POST" || JSON.parse(options.body).fileType !== 1 || JSON.parse(options.body).visualize !== false) throw new Error("PaddleOCR-VL 请求合同错误。");

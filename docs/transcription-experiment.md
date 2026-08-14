@@ -8,6 +8,8 @@
 2. VLM 复核：当前实验分支提供 `vlm-openai-compatible` 适配器，适用于兼容 Chat Completions 的本地或托管视觉接口；输出仍须经过 `createTranscription` 收敛，绝不能直接寻迹或写事实旁批。
 3. 数字墨水：未来原生壳保留笔画坐标与时序后再单独评估；它不是当前纯 PWA 的替换实现。
 
+速度优先的第一托管候选是 `huawei-handwriting`，而不是把经典 Tesseract 当成生产识别器。它只接收本次笔迹段的紧裁剪 PNG；数字样本以 `HUAWEI_OCR_CHAR_SET=digit` 另建 cohort，中文短句以 `general` 另建 cohort，不能混合报告。只有确认裁剪图满足单行和文字占比要求时，才开启 `HUAWEI_OCR_QUICK_MODE=1`；该开关是否实际改善 p50/p95，必须由同一批获同意的平板笔迹测量决定。真实测试前，服务端须单独配置 endpoint、项目 ID 和短期 token；这些值、原始笔迹和报告均不得提交仓库。
+
 ## 样本与隐私
 
 不设置 `TRANSCRIPTION_BENCHMARK_MANIFEST` 时，`npm run bench:transcription` 只运行无用户数据的合同夹具，验证计时与报告格式，**不代表真实识别准确率**。设置本机清单后才会读取真实实验 PNG；开始真实对比前，建立经明确同意的、只用于测试的样本集：
