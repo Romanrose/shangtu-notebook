@@ -81,6 +81,8 @@ const fakeSession = {
 };
 const seekOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession, retrieve: retrieveFixture });
 if (seekOutcome.status !== "ok" || seekOutcome.outcome.kind !== "evidence") throw new Error("寻迹没有只返回规范化 outcome。");
+const unconfiguredGraphOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession });
+if (unconfiguredGraphOutcome.status !== "graph_unconfigured") throw new Error("正常模式缺少图谱时不应退回演练夹具。");
 let retrievalCalls = 0;
 const cachedSeekOutcome = await runSeek({
   transcription: "李白写过《将进酒》吗？",
