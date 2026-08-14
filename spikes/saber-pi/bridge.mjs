@@ -66,11 +66,28 @@ function bridgeEnvelope(body, stage, result) {
 }
 
 /**
- * A fixture-only bridge for the Saber spike. The default adapters are local
- * and deterministic: no model, Pi session, network, or credential is used.
+ * Keeps the spike offline unless a server operator explicitly selects an
+ * already-supported transcription provider. Provider configuration and its
+ * credentials remain in the Node process; Saber never receives either.
+ */
+export function createSaberPiTranscriber({
+  provider = process.env.SABER_PI_TRANSCRIPTION_PROVIDER,
+  modelId = process.env.SABER_PI_TRANSCRIPTION_MODEL_ID ?? process.env.VISION_MODEL_ID,
+  transcribe = transcribeInk,
+} = {}) {
+  if (!provider) {
+    return ({ image }) => transcribe({ image, fixtureMode: true });
+  }
+  return ({ image }) => transcribe({ image, provider, modelId });
+}
+
+/**
+ * A constrained bridge for the Saber spike. It remains fixture-only by
+ * default: no model, Pi session, network, or credential is used until the
+ * server operator explicitly selects a supported transcription provider.
  */
 export function createSaberPiFixtureHandler({
-  transcribe = ({ image }) => transcribeInk({ image, fixtureMode: true }),
+  transcribe = createSaberPiTranscriber(),
   seek = ({ transcription, image }) => runFixtureSeek({ transcription, image }),
 } = {}) {
   return async (request, response, next) => {

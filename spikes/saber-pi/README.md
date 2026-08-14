@@ -1,6 +1,6 @@
 # Saber × Pi 独立技术 Spike
 
-状态：第一条纵切面已完成，fixture-only；这不是 Saber fork，也不是当前 PWA 的迁移分支。
+状态：第一条纵切面已完成，默认 fixture-only；这不是 Saber fork，也不是当前 PWA 的迁移分支。
 
 ## 先说清楚：当前版本不是 Saber
 
@@ -85,6 +85,16 @@ node spikes/saber-pi/bridge.mjs
 ```
 
 它只开放两个 POST 路径，默认不读取任何模型、Pi、CNKGraph 或同步凭据，也不访问网络。
+
+如果受控服务端已按现有转写合同配置好 provider，运维人员才可在 Node 进程中显式选择它：
+
+```bash
+SABER_PI_TRANSCRIPTION_PROVIDER=huawei-handwriting \
+SABER_PI_TRANSCRIPTION_MODEL_ID=handwriting-v1 \
+node spikes/saber-pi/bridge.mjs
+```
+
+这只会把 PNG 交给现有 `transcribeInk` 服务端 adapter；华为 token、endpoint 和 project ID 仍只来自该进程的 `HUAWEI_OCR_*` 环境变量，绝不发送到 Saber。未设置 `SABER_PI_TRANSCRIPTION_PROVIDER` 时始终使用 fixture；显式选择 provider 但缺少其服务端配置时，返回既有的安全 `vision_unconfigured`，不会伪装成 fixture 识别结果。本 Spike 尚未填入这些变量或发起真实 OCR 请求。
 
 ## Client adapter harness
 
