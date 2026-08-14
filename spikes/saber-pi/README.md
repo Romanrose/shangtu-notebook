@@ -22,7 +22,8 @@ npm run check:saber-isolation
 /Users/romanrose/Project/saber-pi-experiment
 branch: experiment/pi-companion
 upstream: https://github.com/saber-notes/saber.git
-commit: 34c57e51fb97ad23b781d7f681beaa821746b8ef
+upstream baseline: 34c57e51fb97ad23b781d7f681beaa821746b8ef (v1.35.1+1)
+local Spike HEAD: 52ac983e9dcd99b499dc83786401b00ac62fa776
 ```
 
 该目录包含 Saber 自己的 GPL-3.0 源码和 Flutter submodule，但不属于本仓库，不会被当前仓库的 Git 提交或构建包含。可在另一台机器上复现为：
