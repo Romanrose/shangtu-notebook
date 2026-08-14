@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createSaberPiFixtureHandler, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
+import { createSaberPiFixtureHandler, createSaberPiTranscriber, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
 import { runFixtureSeek } from "../../server/fixture-seek.mjs";
 import { fixtureTranscription } from "../../server/transcription-adapter.mjs";
 
@@ -7,6 +7,32 @@ const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,AA==" };
 const events = [];
 let transcribeCalls = 0;
 let seekCalls = 0;
+
+const defaultTranscriberCalls = [];
+const defaultTranscriber = createSaberPiTranscriber({
+  transcribe: async (request) => {
+    defaultTranscriberCalls.push(request);
+    return { status: "ok" };
+  },
+});
+await defaultTranscriber({ image: tinyInk });
+if (defaultTranscriberCalls.length !== 1 || defaultTranscriberCalls[0].fixtureMode !== true || defaultTranscriberCalls[0].provider !== undefined) {
+  throw new Error("unconfigured bridge must remain fixture-only");
+}
+
+const providerTranscriberCalls = [];
+const providerTranscriber = createSaberPiTranscriber({
+  provider: "huawei-handwriting",
+  modelId: "handwriting-v1",
+  transcribe: async (request) => {
+    providerTranscriberCalls.push(request);
+    return { status: "ok" };
+  },
+});
+await providerTranscriber({ image: tinyInk });
+if (providerTranscriberCalls.length !== 1 || providerTranscriberCalls[0].provider !== "huawei-handwriting" || providerTranscriberCalls[0].modelId !== "handwriting-v1" || providerTranscriberCalls[0].fixtureMode !== undefined) {
+  throw new Error("configured bridge did not forward the selected server provider");
+}
 
 const server = createServer(createSaberPiFixtureHandler({
   transcribe: async ({ image }) => {
@@ -70,7 +96,7 @@ try {
   const forbidden = await fetch(`${origin}/spike/saber-pi/v1/anything`, { method: "POST" });
   if (forbidden.status !== 404) throw new Error("bridge exposed a non-contract route");
   if (transcribeCalls !== 1 || seekCalls !== 3) throw new Error("unexpected bridge call count");
-  console.log("Saber Pi spike fixture verified: local awakening, editable transcription, evidence, gap, confirmation, and quiet-mode boundaries.");
+  console.log("Saber Pi spike fixture verified: provider selection, local awakening, editable transcription, evidence, gap, confirmation, and quiet-mode boundaries.");
 } finally {
   server.close();
 }
