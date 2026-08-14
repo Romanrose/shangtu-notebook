@@ -55,8 +55,11 @@ export async function createPiNotebookSession({ retrieve, provider = process.env
   const model = getModel(provider, modelId);
   if (!model) throw new Error(`Pi 未找到模型 ${provider}/${modelId}。`);
   const modelRuntime = await ModelRuntime.create();
+  const settingsManager = SettingsManager.inMemory({ compaction: { enabled: false } });
   const loader = new DefaultResourceLoader({
     cwd: process.cwd(),
+    agentDir: process.cwd(),
+    settingsManager,
     extensionFactories: [createNotebookExtension({ retrieve })],
     // This is a product agent, not a coding agent: load no ambient tools or files.
     noExtensions: true,
@@ -67,15 +70,14 @@ export async function createPiNotebookSession({ retrieve, provider = process.env
     systemPrompt: notebookSystemPrompt("（由本次笔迹图像转写后提供）"),
   });
   await loader.reload();
-  const session = await createAgentSession({
+  const { session } = await createAgentSession({
     cwd: process.cwd(),
     model,
     modelRuntime,
     resourceLoader: loader,
-    initialActiveToolNames: [],
-    allowedToolNames: allowedTools,
+    tools: allowedTools,
     sessionManager: SessionManager.inMemory(),
-    settingsManager: SettingsManager.inMemory({ compaction: { enabled: false } }),
+    settingsManager,
   });
   const active = session.getActiveToolNames().sort();
   if (JSON.stringify(active) !== JSON.stringify([...allowedTools].sort())) {

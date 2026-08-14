@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
+import { createSouyunSnapshotRetriever } from "./souyun-snapshot-retriever.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
 
 const MAX_BODY_BYTES = 2_200_000;
@@ -32,7 +33,7 @@ async function readJson(request) {
 export function seekNotebook(input) {
   return process.env.NOTEBOOK_FIXTURE_MODE === "1"
     ? runFixtureSeek(input)
-    : runSeek({ ...input, retrieve: createCnkgraphGatewayRetriever() });
+    : runSeek({ ...input, retrieve: process.env.CNKGRAPH_PROVIDER === "souyun-snapshot" ? createSouyunSnapshotRetriever() : createCnkgraphGatewayRetriever() });
 }
 
 export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekNotebook } = {}) {
