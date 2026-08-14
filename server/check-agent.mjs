@@ -81,6 +81,24 @@ const fakeSession = {
 };
 const seekOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession, retrieve: retrieveFixture });
 if (seekOutcome.status !== "ok" || seekOutcome.outcome.kind !== "evidence") throw new Error("寻迹没有只返回规范化 outcome。");
+let retrievalCalls = 0;
+const cachedSeekOutcome = await runSeek({
+  transcription: "李白写过《将进酒》吗？",
+  createSession: async ({ retrieve }) => ({
+    messages: [],
+    async prompt() {
+      await retrieve("李白写过《将进酒》吗？");
+      this.messages.push({ role: "assistant", content: [{ type: "text", text: JSON.stringify({ kind: "evidence", sourceIds: ["source:jiangjinjiu-li-bai"], path: ["李白", "作者", "将进酒"] }) }] });
+    },
+    async waitForIdle() {},
+    dispose() {},
+  }),
+  retrieve: async (query) => {
+    retrievalCalls++;
+    return retrieveFixture(query);
+  },
+});
+if (cachedSeekOutcome.status !== "ok" || cachedSeekOutcome.outcome.kind !== "evidence" || retrievalCalls !== 1) throw new Error("同一寻迹请求重复查询了图谱。");
 if ((await runSeek({ transcription: "李白是谁？" })).status !== "model_unconfigured") throw new Error("未配置模型时必须显式降级。");
 const unconfiguredTranscription = await transcribeInk({ image: tinyInk });
 if (unconfiguredTranscription.status !== "vision_unconfigured" || unconfiguredTranscription.providerStatus !== "unconfigured") throw new Error("未配置视觉模型时必须显式降级。");
