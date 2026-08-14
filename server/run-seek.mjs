@@ -21,6 +21,7 @@ function retrieveUnconfigured(query) {
 /** Future /api/seek boundary. Image stays opaque until the replaceable vision step. */
 export async function runSeek({ transcription, image, createSession = createPiNotebookSession, retrieve = retrieveUnconfigured }) {
   if (!transcription?.trim()) return { status: "needs_transcription" };
+  if (retrieve === retrieveUnconfigured) return { status: "graph_unconfigured" };
   const requestRetrieval = cacheRequestRetrieval(retrieve);
   const session = await createSession({ retrieve: requestRetrieval });
   if (!session) return { status: "model_unconfigured" };

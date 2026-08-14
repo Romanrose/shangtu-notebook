@@ -81,8 +81,12 @@ const fakeSession = {
 };
 const seekOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession, retrieve: retrieveFixture });
 if (seekOutcome.status !== "ok" || seekOutcome.outcome.kind !== "evidence") throw new Error("寻迹没有只返回规范化 outcome。");
-const unconfiguredGraphOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => fakeSession });
-if (unconfiguredGraphOutcome.status !== "graph_unconfigured") throw new Error("正常模式缺少图谱时不应退回演练夹具。");
+let unconfiguredGraphSessionCalls = 0;
+const unconfiguredGraphOutcome = await runSeek({ transcription: "李白写过《将进酒》吗？", createSession: async () => {
+  unconfiguredGraphSessionCalls++;
+  return fakeSession;
+} });
+if (unconfiguredGraphOutcome.status !== "graph_unconfigured" || unconfiguredGraphSessionCalls !== 0) throw new Error("正常模式缺少图谱时不应退回演练夹具或启动 Pi。");
 let retrievalCalls = 0;
 const cachedSeekOutcome = await runSeek({
   transcription: "李白写过《将进酒》吗？",
@@ -101,7 +105,7 @@ const cachedSeekOutcome = await runSeek({
   },
 });
 if (cachedSeekOutcome.status !== "ok" || cachedSeekOutcome.outcome.kind !== "evidence" || retrievalCalls !== 1) throw new Error("同一寻迹请求重复查询了图谱。");
-if ((await runSeek({ transcription: "李白是谁？" })).status !== "model_unconfigured") throw new Error("未配置模型时必须显式降级。");
+if ((await runSeek({ transcription: "李白是谁？", retrieve: retrieveFixture })).status !== "model_unconfigured") throw new Error("未配置模型时必须显式降级。");
 const unconfiguredTranscription = await transcribeInk({ image: tinyInk });
 if (unconfiguredTranscription.status !== "vision_unconfigured" || unconfiguredTranscription.providerStatus !== "unconfigured") throw new Error("未配置视觉模型时必须显式降级。");
 const invalidTranscription = await transcribeInk({ image: { mimeType: "image/jpeg", data: "invalid" } });
