@@ -20,6 +20,8 @@
 
 在实验分支可打开 `/?experiment=transcription` 进入采样辅助路径。写完并完成本地停笔反馈后，纸页边会提供“下载样本 PNG”，下载的是与 `/api/transcribe` 相同的当前笔迹裁剪图；默认 URL 不显示该入口，也不会上传额外数据或保存服务端副本。下载后的 PNG 需由实验者在本机目录中按上面的 manifest 格式补充人工校对文本和匿名元数据。
 
+隔离的 Saber Spike 没有把采集功能带入纸页 UI。只有取得书写者明确同意后，桥接服务进程才可设置 `SABER_PI_BENCHMARK_CAPTURE_DIR=/absolute/local/directory`：它仅在寻迹模式的 `/transcribe` 收到当前裁剪 PNG 时，将图片以既有 `shangtu-ink-{12 位匿名 ID}-page-01-{时间}.png` 格式留在该本机目录。默认不写任何副本；静读、确认后的 `/seek`、转写文本、页面 ID、图谱结果和凭据都不写入。该受控 Node 服务采集不属于 Pi，也不能作为 Pi 的文件工具；Saber Spike 的最终生产选型仍须另行补齐同一批样本的时延/确认记录。
+
 同一实验路径还提供“下载时延 JSON”。每次书写会生成一个 12 位随机匿名 `sampleId`，同时写入 PNG 与 timing 文件名/JSON，便于在本机配对而不记录用户身份。文件内容只包含 `schema`、页码、`sampleId`，以及相对停笔时刻的匿名事件：`pen_up`、`local_awakening`、`transcription_request`、`transcription_result`、`transcription_confirmed`；结果事件附带非敏感的 `status`/`providerStatus`/受控 `provider` 标签，确认事件只附带 `edited: true/false`。它不包含转写文本、PNG 内容、URL、endpoint、模型 ID、凭据或请求体，可将同一笔迹的“停笔 → 本地苏醒”“停笔 → 服务端结果”“停笔 → 用户确认”按 provider 分开比较。静读模式与默认 URL 不生成该记录。
 
 实验导出状态会随纸页记录保存；新建页面或翻页回看不会丢失原页的 sampleId、PNG 和 timing 下载入口。重新开始在该页书写时，才会为新的笔迹生成新的匿名样本。

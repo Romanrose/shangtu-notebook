@@ -1,4 +1,7 @@
+import { randomBytes } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { runFixtureSeek } from "../../server/fixture-seek.mjs";
 import { seekNotebook } from "../../server/notebook-server.mjs";
 import { transcribeInk } from "../../server/transcription-adapter.mjs";
@@ -11,6 +14,7 @@ const FIXTURE_SCENARIO_TRANSCRIPTIONS = Object.freeze({
   ambiguous: "李贺",
   gap: "珊瑚",
 });
+const PNG_DATA_PREFIX = "data:image/png;base64,";
 
 export const SABER_PI_SPIKE_PATHS = Object.freeze({
   transcribe: `${BRIDGE_PREFIX}/transcribe`,
@@ -47,6 +51,34 @@ function validId(value) {
 function validInk(image) {
   return image && typeof image === "object" && image.mimeType === "image/png" &&
     typeof image.data === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image.data);
+}
+
+function benchmarkTimestamp(now) {
+  return now.toISOString().replace(/[-:.TZ]/g, "");
+}
+
+/**
+ * Keeps explicitly authorized Saber experiment ink on the local bridge host.
+ * It is disabled without a directory, does not retain text or page metadata,
+ * and intentionally never becomes a Pi tool.
+ */
+export function createSaberPiBenchmarkCapture({
+  directory = process.env.SABER_PI_BENCHMARK_CAPTURE_DIR,
+  now = () => new Date(),
+  sampleId = () => randomBytes(6).toString("hex"),
+  makeDirectory = mkdir,
+  write = writeFile,
+} = {}) {
+  if (!directory) return async () => {};
+  const outputDirectory = resolve(directory);
+  return async ({ image }) => {
+    const id = sampleId();
+    if (!/^[A-Za-z0-9]{12}$/.test(id)) throw new Error("invalid_benchmark_sample_id");
+    const png = Buffer.from(image.data.slice(PNG_DATA_PREFIX.length), "base64");
+    const filename = `shangtu-ink-${id}-page-01-${benchmarkTimestamp(now())}.png`;
+    await makeDirectory(outputDirectory, { recursive: true });
+    await write(resolve(outputDirectory, filename), png, { flag: "wx" });
+  };
 }
 
 function validateCommon(body) {
@@ -125,6 +157,7 @@ export function createSaberPiFixtureHandler({
   transcribe = createSaberPiTranscriber(),
   seek,
   fixtureScenario = process.env.SABER_PI_FIXTURE_SCENARIO,
+  captureSample = createSaberPiBenchmarkCapture(),
 } = {}) {
   const bridgeSeek = seek ?? createSaberPiSeeker({ fixtureScenario });
 
@@ -140,6 +173,7 @@ export function createSaberPiFixtureHandler({
       if (commonError) return writeJson(response, 409, bridgeEnvelope(body ?? {}, "rejected", { status: commonError }));
 
       if (request.url === SABER_PI_SPIKE_PATHS.transcribe) {
+        await captureSample({ image: body.image });
         const result = await transcribe({ image: body.image });
         return writeJson(response, 200, bridgeEnvelope(body, "transcription", result));
       }
