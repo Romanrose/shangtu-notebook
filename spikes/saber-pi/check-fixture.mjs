@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createSaberPiFixtureHandler, createSaberPiSeeker, createSaberPiTranscriber, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
+import { createSaberPiBenchmarkCapture, createSaberPiFixtureHandler, createSaberPiSeeker, createSaberPiTranscriber, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
 import { runFixtureSeek } from "../../server/fixture-seek.mjs";
 import { fixtureTranscription } from "../../server/transcription-adapter.mjs";
 
@@ -7,6 +7,29 @@ const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,AA==" };
 const events = [];
 let transcribeCalls = 0;
 let seekCalls = 0;
+const capturedSamples = [];
+
+const defaultCapture = createSaberPiBenchmarkCapture({ directory: "" });
+await defaultCapture({ image: tinyInk });
+let createdDirectory;
+let capturedPath;
+let capturedPng;
+const explicitCapture = createSaberPiBenchmarkCapture({
+  directory: "/tmp/shangtu-authorized-samples",
+  now: () => new Date("2026-08-14T10:00:00.000Z"),
+  sampleId: () => "abc123def456",
+  makeDirectory: async (directory, options) => {
+    createdDirectory = { directory, options };
+  },
+  write: async (file, png, options) => {
+    capturedPath = { file, options };
+    capturedPng = png;
+  },
+});
+await explicitCapture({ image: tinyInk });
+if (createdDirectory?.directory !== "/tmp/shangtu-authorized-samples" || createdDirectory.options?.recursive !== true || !capturedPath?.file.endsWith("shangtu-ink-abc123def456-page-01-20260814100000000.png") || capturedPath.options?.flag !== "wx" || !Buffer.isBuffer(capturedPng) || capturedPng.toString("base64") !== "AA==") {
+  throw new Error("authorized benchmark capture did not preserve the anonymous PNG-only contract");
+}
 
 const defaultTranscriberCalls = [];
 const defaultTranscriber = createSaberPiTranscriber({
@@ -67,6 +90,7 @@ const server = createServer(createSaberPiFixtureHandler({
     if (!events.includes("transcription_confirmed")) throw new Error("seek must follow confirmation");
     return runFixtureSeek({ transcription, image });
   },
+  captureSample: async ({ image }) => capturedSamples.push(image),
 }));
 
 await new Promise((resolve) => server.listen(0, resolve));
@@ -87,6 +111,7 @@ try {
   });
   if (transcription.status !== 200 || transcription.body.stage !== "transcription" || transcription.body.transcription.text !== fixtureTranscription) throw new Error("fixture transcription vertical slice failed");
   if (transcription.body.originalInk !== "retained_by_saber") throw new Error("bridge did not preserve Saber ink ownership");
+  if (capturedSamples.length !== 1 || capturedSamples[0]?.mimeType !== tinyInk.mimeType || capturedSamples[0]?.data !== tinyInk.data) throw new Error("authorized benchmark capture did not retain exactly the current transcription ink");
 
   const missingConfirmation = await post(SABER_PI_SPIKE_PATHS.seek, {
     pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk,
@@ -98,6 +123,7 @@ try {
     pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk, confirmedText: fixtureTranscription,
   });
   if (evidence.status !== 200 || evidence.body.outcome.kind !== "evidence" || evidence.body.outcome.path.join(" → ") !== "李白 → 作者 → 将进酒" || evidence.body.outcome.source.length !== 1) throw new Error("evidence branch failed");
+  if (capturedSamples.length !== 1) throw new Error("confirmed seek unexpectedly retained another ink copy");
 
   const ambiguous = await post(SABER_PI_SPIKE_PATHS.seek, {
     pageId: "note-01-page-01", strokeSegmentId: "segment-01", mode: "seek", image: tinyInk, confirmedText: "李贺和长安有什么关联？",
@@ -145,6 +171,7 @@ try {
     pageId: "note-01-page-01", strokeSegmentId: "segment-quiet", mode: "quiet", image: tinyInk,
   });
   if (quiet.status !== 409 || quiet.body.status !== "quiet_mode_no_seek" || transcribeCalls !== beforeQuietCalls.transcribeCalls || seekCalls !== beforeQuietCalls.seekCalls) throw new Error("quiet mode crossed bridge boundary");
+  if (capturedSamples.length !== 1) throw new Error("quiet mode unexpectedly retained ink");
 
   const forbidden = await fetch(`${origin}/spike/saber-pi/v1/anything`, { method: "POST" });
   if (forbidden.status !== 404) throw new Error("bridge exposed a non-contract route");
