@@ -2,6 +2,8 @@
 
 状态：第一条纵切面已完成，默认 fixture-only；这不是 Saber fork，也不是当前 PWA 的迁移分支。
 
+华为平板的可复核验收矩阵见 [Saber Spike 华为平板验收记录](../../docs/saber-spike-huawei-validation.md)。
+
 ## 先说清楚：当前版本不是 Saber
 
 当前仓库里没有 Saber 的 Flutter 源码、`pubspec.yaml`、Git submodule、编译产物或 GPL-3.0 文件副本。Saber 只被当作外部候选底座调查过；当前可运行的代码全部位于 `spikes/saber-pi/`，是 bridge、fixture 和未来 adapter 的行为合同。
