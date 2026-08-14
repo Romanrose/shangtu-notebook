@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createSaberPiFixtureHandler, createSaberPiTranscriber, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
+import { createSaberPiFixtureHandler, createSaberPiSeeker, createSaberPiTranscriber, SABER_PI_SPIKE_PATHS } from "./bridge.mjs";
 import { runFixtureSeek } from "../../server/fixture-seek.mjs";
 import { fixtureTranscription } from "../../server/transcription-adapter.mjs";
 
@@ -32,6 +32,28 @@ const providerTranscriber = createSaberPiTranscriber({
 await providerTranscriber({ image: tinyInk });
 if (providerTranscriberCalls.length !== 1 || providerTranscriberCalls[0].provider !== "huawei-handwriting" || providerTranscriberCalls[0].modelId !== "handwriting-v1" || providerTranscriberCalls[0].fixtureMode !== undefined) {
   throw new Error("configured bridge did not forward the selected server provider");
+}
+
+const realSeekCalls = [];
+const realSeeker = createSaberPiSeeker({
+  provider: "notebook",
+  seek: async (input) => {
+    realSeekCalls.push(input);
+    return { status: "ok", outcome: { kind: "gap", gap: "受控内核未找到可靠证据。" } };
+  },
+});
+const realSeekResult = await realSeeker({ transcription: "李白", image: tinyInk });
+if (realSeekCalls.length !== 1 || realSeekCalls[0].transcription !== "李白" || realSeekCalls[0].image !== tinyInk || realSeekResult.outcome.kind !== "gap") {
+  throw new Error("explicit notebook seeker did not preserve the confirmed-text boundary");
+}
+for (const options of [{ provider: "unbounded" }, { provider: "notebook", fixtureScenario: "gap" }]) {
+  let rejected = false;
+  try {
+    createSaberPiSeeker(options);
+  } catch (error) {
+    rejected = error instanceof Error && ["invalid_saber_pi_seek_provider", "fixture_scenario_requires_fixture_seek_provider"].includes(error.message);
+  }
+  if (!rejected) throw new Error("invalid Saber seek provider configuration was accepted");
 }
 
 const server = createServer(createSaberPiFixtureHandler({
