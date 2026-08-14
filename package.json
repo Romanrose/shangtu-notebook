@@ -18,6 +18,7 @@
     "prepare:transcription-casia": "python3 server/prepare-casia-wptt-samples.py",
     "summarize:transcription-timing": "node server/summarize-transcription-timings.mjs",
     "preflight:transcription": "node server/preflight-transcription.mjs",
+    "preflight:pi": "node server/preflight-pi-model.mjs",
     "compare:transcription": "node server/compare-transcription-reports.mjs"
   },
   "dependencies": {
