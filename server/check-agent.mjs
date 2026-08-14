@@ -8,6 +8,7 @@ import { inspectRealServicesConfiguration } from "./preflight-real-services.mjs"
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
+import { createSouyunSnapshotRetriever } from "./souyun-snapshot-retriever.mjs";
 import { invokeOpenAiCompatibleVlm } from "./providers/openai-compatible-vlm.mjs";
 import { invokeHuaweiHandwriting } from "./providers/huawei-handwriting.mjs";
 import { invokePaddleOcr } from "./providers/paddleocr.mjs";
@@ -103,6 +104,15 @@ const unavailableGateway = createCnkgraphGatewayRetriever({ endpoint: "https://g
 if ((await unavailableGateway("李白")).kind !== "graph_unavailable") throw new Error("图谱 gateway 的 HTTP 故障没有显式降级。");
 const timedOutGateway = createCnkgraphGatewayRetriever({ endpoint: "https://gateway.test/seek", authToken: "server-only-token", timeoutMs: 1, fetchImpl: () => new Promise(() => {}) });
 if ((await timedOutGateway("李白")).kind !== "graph_timed_out") throw new Error("图谱 gateway 超时没有显式降级。");
+const snapshotGraph = {
+  source: "搜韵网 / CNKGraph 开放 API",
+  query: { person: "李白" },
+  nodes: [{ id: "cnk:person:15188", label: "李白", type: "Person" }, { id: "cnk:work:1", label: "将进酒", type: "Work" }],
+  edges: [{ source: "cnk:person:15188", relation: "wrote", target: "cnk:work:1", evidence_refs: ["https://api.cnkgraph.com/api/Writing/1"] }],
+};
+const snapshotRetriever = createSouyunSnapshotRetriever({ enabled: true, graphs: [snapshotGraph] });
+const snapshotEvidence = await snapshotRetriever("李白");
+if (!snapshotRetriever.isConfigured || snapshotEvidence.kind !== "evidence" || snapshotEvidence.nodes.length !== 2 || snapshotEvidence.edges.length !== 1 || snapshotEvidence.sources.length !== 1 || (await snapshotRetriever("李白写过什么？")).kind !== "evidence_gap") throw new Error("搜韵快照没有保持精确确认、来源与证据缺口边界。");
 const verifiedEvidence = normalizeSeekOutcome({
   transcription: "李白写过《将进酒》吗？",
   raw: JSON.stringify({ kind: "evidence", text: "李白生活在盛唐。", sourceIds: ["source:jiangjinjiu-li-bai"], path: ["李白", "作者", "将进酒"], association: "可从酒诗再读。" }),
@@ -391,5 +401,5 @@ try {
 }
 const session = await createPiNotebookSession({ retrieve: async () => ({ kind: "evidence_gap" }) });
 if (session !== null && !process.env.PI_MODEL_PROVIDER) throw new Error("未配置模型时不应创建 Pi 会话。");
-session?.session.dispose();
+session?.dispose();
 console.log("Pi notebook adapter contract verified.");

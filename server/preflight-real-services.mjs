@@ -1,4 +1,6 @@
 import { inspectPiModelConfiguration } from "./preflight-pi-model.mjs";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 function isHttpUrl(value, { httpsOnly = false } = {}) {
   try {
@@ -48,6 +50,10 @@ function inspectOcrConfiguration(env) {
 }
 
 function inspectCnkgraphGatewayConfiguration(env) {
+  if (env.CNKGRAPH_PROVIDER === "souyun-snapshot") {
+    const directory = env.CNKGRAPH_SNAPSHOT_DIR || resolve(process.cwd(), "data/souyun-snapshots");
+    return existsSync(directory) ? { status: "graph_snapshot_ready_for_controlled_call" } : { status: "graph_snapshot_missing" };
+  }
   const endpoint = env.CNKGRAPH_GATEWAY_ENDPOINT;
   const authToken = env.CNKGRAPH_GATEWAY_AUTH_TOKEN;
   if (!endpoint && !authToken) return { status: "graph_unconfigured" };
@@ -75,7 +81,7 @@ export function inspectRealServicesConfiguration({ env = process.env } = {}) {
     pi,
     graph,
     readyForOcrCall: ocr.status === "ocr_ready_for_controlled_call",
-    readyForSeekCall: pi.status === "pi_ready_for_controlled_call" && graph.status === "graph_ready_for_controlled_call",
+    readyForSeekCall: pi.status === "pi_ready_for_controlled_call" && ["graph_ready_for_controlled_call", "graph_snapshot_ready_for_controlled_call"].includes(graph.status),
   };
 }
 
