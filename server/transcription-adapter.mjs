@@ -76,7 +76,7 @@ export async function transcribeInk({ image, provider = process.env.VISION_MODEL
     return runTranscriptionProvider({ invoke: ({ signal }) => invokePaddleOcr({ image, endpoint, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
   }
   if (provider === "huawei-handwriting" && huaweiEndpoint && huaweiProjectId && huaweiAuthToken) {
-    return runTranscriptionProvider({ invoke: ({ signal }) => invokeHuaweiHandwriting({ image, endpoint: huaweiEndpoint, projectId: huaweiProjectId, authToken: huaweiAuthToken, charSet: huaweiCharSet, quickMode: huaweiQuickMode === undefined ? undefined : huaweiQuickMode !== "0", detectDirection: huaweiDetectDirection === "1", signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
+    return runTranscriptionProvider({ invoke: ({ signal }) => invokeHuaweiHandwriting({ image, endpoint: huaweiEndpoint, projectId: huaweiProjectId, authToken: huaweiAuthToken, charSet: huaweiCharSet, quickMode: huaweiQuickMode === "1", detectDirection: huaweiDetectDirection === "1", signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
   }
   if (provider === "paddleocr-vl" && vlEndpoint) {
     return runTranscriptionProvider({ invoke: ({ signal }) => invokePaddleOcrVl({ image, endpoint: vlEndpoint, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));

@@ -64,7 +64,7 @@ export async function invokeHuaweiHandwriting({
   projectId = process.env.HUAWEI_OCR_PROJECT_ID,
   authToken = process.env.HUAWEI_OCR_AUTH_TOKEN,
   charSet = process.env.HUAWEI_OCR_CHAR_SET ?? "general",
-  quickMode = process.env.HUAWEI_OCR_QUICK_MODE !== "0",
+  quickMode = process.env.HUAWEI_OCR_QUICK_MODE === "1",
   detectDirection = process.env.HUAWEI_OCR_DETECT_DIRECTION === "1",
   fetchImpl = fetch,
   signal,
