@@ -3,6 +3,7 @@ import { CNKGRAPH_GATEWAY_LIMITS, createCnkgraphGatewayRetriever } from "./cnkgr
 import { allowedTools, clarify, createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
 import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { createNotebookServer } from "./notebook-server.mjs";
+import { inspectPiModelConfiguration } from "./preflight-pi-model.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
@@ -41,6 +42,11 @@ async function withServer(options, callback) {
 
 const expected = ["clarify_entity", "retrieve_cnkgraph", "validate_evidence", "compose_annotation"];
 if (JSON.stringify(allowedTools) !== JSON.stringify(expected)) throw new Error("Pi 工具白名单发生漂移。");
+if (inspectPiModelConfiguration({ env: {} }).status !== "pi_unconfigured") throw new Error("Pi 空配置预检错误。");
+if (inspectPiModelConfiguration({ provider: "openai", modelId: "not-a-real-model", env: {} }).status !== "pi_model_unknown") throw new Error("Pi 未知模型预检错误。");
+if (inspectPiModelConfiguration({ provider: "openai", modelId: "gpt-4.1", env: {} }).status !== "pi_auth_missing") throw new Error("Pi 缺失认证预检错误。");
+const piReadyPreflight = inspectPiModelConfiguration({ provider: "openai", modelId: "gpt-4.1", env: { OPENAI_API_KEY: "server-only-test-token" } });
+if (piReadyPreflight.status !== "pi_ready_for_controlled_call" || !piReadyPreflight.authConfigured || JSON.stringify(piReadyPreflight).includes("server-only-test-token")) throw new Error("Pi 预检泄露认证值或没有识别服务端认证。");
 if (clarify("李贺写过什么？").kind !== "clarification") throw new Error("实体歧义未进入澄清分支。");
 if (!notebookSystemPrompt("李白是谁？").includes("只使用给定工具")) throw new Error("Pi 系统约束缺失。");
 const evidence = await retrieveFixture("李白到长安以后");
