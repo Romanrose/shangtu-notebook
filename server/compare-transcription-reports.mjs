@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const PROVIDERS = new Set(["fixture", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"]);
+const PROVIDERS = new Set(["fixture", "huawei-handwriting", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"]);
 const EVIDENCE_VALUES = new Set(["unknown", "public_casia", "consented_user"]);
 const PREPROCESSING_PATTERN = /^[A-Za-z0-9._-]{1,80}$/;
 
