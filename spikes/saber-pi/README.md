@@ -116,7 +116,15 @@ SABER_PI_TRANSCRIPTION_MODEL_ID=handwriting-v1 \
 node spikes/saber-pi/bridge.mjs
 ```
 
-这只会把 PNG 交给现有 `transcribeInk` 服务端 adapter；华为 token、endpoint 和 project ID 仍只来自该进程的 `HUAWEI_OCR_*` 环境变量，绝不发送到 Saber。未设置 `SABER_PI_TRANSCRIPTION_PROVIDER` 时始终使用 fixture；显式选择 provider 但缺少其服务端配置时，返回既有的安全 `vision_unconfigured`，不会伪装成 fixture 识别结果。本 Spike 尚未填入这些变量或发起真实 OCR 请求。
+这只会把 PNG 交给现有 `transcribeInk` 服务端 adapter；华为 token、endpoint 和 project ID 仍只来自该进程的 `HUAWEI_OCR_*` 环境变量，绝不发送到 Saber。未设置 `SABER_PI_TRANSCRIPTION_PROVIDER` 时始终使用 fixture；显式选择 provider 但缺少其服务端配置时，返回既有的安全 `vision_unconfigured`，不会伪装成 fixture 识别结果。
+
+确认后的寻迹也默认 fixture。只有同时完成 `npm run preflight:services`，并在本机 `.env` 显式设置下列值，bridge 才会将**用户确认后的文本**和同一 PNG 交给既有 `/api/seek` 内核：
+
+```bash
+SABER_PI_SEEK_PROVIDER=notebook
+```
+
+`notebook` 复用主服务的四工具受限 Pi 与当前配置的图谱 retriever；它不是直接网络调用，也不会让 Flutter 读取任何模型、图谱或凭据。它不能与 `SABER_PI_FIXTURE_SCENARIO` 同时使用，防止演练分支被误认为真实结果。省略或设为 `fixture` 时仍是完全离线的 fixture seek。
 
 ## Client adapter harness
 
@@ -176,9 +184,9 @@ cd /Users/romanrose/Project/saber-pi-experiment
 ## 当前缺口与下一步
 
 - 当前 JS harness、Dart smoke、独立 Saber macOS UI 和真实华为平板 UI 已证明第一条纵切面：Saber 页面保留原始笔迹，停笔后进入可编辑转写，确认后在页边显示“有证据”、证据正文、有限路径和来源。本轮没有向 Saber 上游远程推送。
-- 已启动当前仓库的 fixture bridge，并用真实 HTTP 请求验证 `/transcribe` → 可编辑转写、`/seek` → `evidence` 两个 live 路径；返回均明确 `originalInk: "retained_by_saber"`。
+- 当前 bridge 默认 fixture seek；服务端可显式设置 `SABER_PI_SEEK_PROVIDER=notebook`，使确认后的文本复用受限 Pi 与已配置图谱内核。该开关与 fixture scenario 互斥，且不向 Flutter 暴露任何凭据。
 - 普通 `flutter run -d macos` 仍会被 `com.adilhanney.saber` 的 provisioning profile 阻断；当前已能启动一个独立工作区生成的 unsigned Debug `Saber.app`，并完成上述 fixture-only UI 演示。可复现的 clean build 仍需整理 Rust 1.97.1 的 PATH/toolchain；本轮没有修改或提交 Saber 的平台工程生成物。
 - 已在 USB 调试授权的华为 `DBY-W09`（Android 12 / API 31）上安装独立 Saber Debug APK；通过 `adb reverse tcp:4175 tcp:4175` 接入 Mac fixture，实际看到可编辑转写，并在确认后看到“有证据”正文、有限路径和来源从页边逐字出现。强制停止并重开独立 Spike 后，临时笔记及其原始笔迹缩略图仍在。另在关闭 fixture bridge 后切至静读模式新增一笔：只显示“只保存笔迹，不调用 Pi”，没有出现识字、确认或桥接错误。通过 ADB 将平板切到 Android `port` 配置后，触摸新增一笔在约 250ms 已显示“识字中”，随后进入确认并显示同一“有证据”页边回应；测试后已恢复原有自动旋转设置。用户已进一步用真实触控笔在横屏、竖屏分别书写，均能在停笔后进入寻迹模式。该次平板验证仍是 fixture-only，尚未替代真实模型质量或正式发布签名流程。
 - 当前 fixture 仍复用仓库已有固定演练图谱；它不是真实模型、真实来源或真实识别质量测试。
 - `有歧义` 与 `有缺口` 已由 Node fixture、Dart live smoke 和华为平板 UI 覆盖。平板自动化通过仅服务端的固定 fixture scenario 绕过 Android shell 不能注入中文确认文本的限制；它们仍不能被解释为真实实体澄清或真实图谱质量。
-- 下一步最小行动：先确定受控服务端的真实 OCR 供应商和一组获准使用的手写样本，再用现有 adapter 与同一 UI 合同评估识别质量。随后才由服务端配置受限 Pi 模型和搜韵/CNKGraph 网关；先不写 `.sbn2`、同步协议或 Pi 工具代码。
+- 下一步最小行动：用获得明确同意的华为平板真实笔迹评估当前本机 PaddleOCR，并在显式 `notebook` seek 模式下完成一次真机确认→核验证据或证据缺口的记录；先不写 `.sbn2`、同步协议或 Pi 工具代码。

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { runFixtureSeek } from "../../server/fixture-seek.mjs";
+import { seekNotebook } from "../../server/notebook-server.mjs";
 import { transcribeInk } from "../../server/transcription-adapter.mjs";
 
 const MAX_BODY_BYTES = 2_200_000;
@@ -94,20 +95,38 @@ export function createSaberPiTranscriber({
 }
 
 /**
+ * The real path is opt-in. This lets a separate Saber build share the same
+ * constrained server kernel as the PWA without exposing its configuration to
+ * Flutter or changing fixture rehearsal behaviour.
+ */
+export function createSaberPiSeeker({
+  provider = process.env.SABER_PI_SEEK_PROVIDER,
+  fixtureScenario = process.env.SABER_PI_FIXTURE_SCENARIO,
+  seek = seekNotebook,
+} = {}) {
+  if (!provider || provider === "fixture") {
+    const scenarioTranscription = fixtureScenarioTranscription(fixtureScenario);
+    return ({ transcription, image }) => runFixtureSeek({
+      transcription: scenarioTranscription ?? transcription,
+      image,
+    });
+  }
+  if (provider !== "notebook") throw new Error("invalid_saber_pi_seek_provider");
+  if (fixtureScenario) throw new Error("fixture_scenario_requires_fixture_seek_provider");
+  return ({ transcription, image }) => seek({ transcription, image });
+}
+
+/**
  * A constrained bridge for the Saber spike. It remains fixture-only by
- * default: no model, Pi session, network, or credential is used until the
- * server operator explicitly selects a supported transcription provider.
+ * default. Server operators must separately and explicitly choose its OCR
+ * and confirmed-text seek providers; credentials never cross this boundary.
  */
 export function createSaberPiFixtureHandler({
   transcribe = createSaberPiTranscriber(),
   seek,
   fixtureScenario = process.env.SABER_PI_FIXTURE_SCENARIO,
 } = {}) {
-  const scenarioTranscription = fixtureScenarioTranscription(fixtureScenario);
-  const fixtureSeek = seek ?? (({ transcription, image }) => runFixtureSeek({
-    transcription: scenarioTranscription ?? transcription,
-    image,
-  }));
+  const bridgeSeek = seek ?? createSaberPiSeeker({ fixtureScenario });
 
   return async (request, response, next) => {
     if (request.method !== "POST" || !Object.values(SABER_PI_SPIKE_PATHS).includes(request.url)) {
@@ -128,7 +147,7 @@ export function createSaberPiFixtureHandler({
       if (typeof body.confirmedText !== "string" || !body.confirmedText.trim() || body.confirmedText.length > 240) {
         return writeJson(response, 409, bridgeEnvelope(body, "rejected", { status: "confirmation_required" }));
       }
-      const result = await fixtureSeek({ transcription: body.confirmedText.trim(), image: body.image });
+      const result = await bridgeSeek({ transcription: body.confirmedText.trim(), image: body.image });
       return writeJson(response, 200, bridgeEnvelope(body, "annotation", result));
     } catch (error) {
       const status = error instanceof Error && error.message === "body_too_large" ? 413 : 400;
