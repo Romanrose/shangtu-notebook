@@ -1,5 +1,4 @@
 import { createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
-import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 
 function textFromLastAssistant(session) {
@@ -15,8 +14,12 @@ function cacheRequestRetrieval(retrieve) {
   };
 }
 
+function retrieveUnconfigured(query) {
+  return { kind: "graph_unconfigured", query };
+}
+
 /** Future /api/seek boundary. Image stays opaque until the replaceable vision step. */
-export async function runSeek({ transcription, image, createSession = createPiNotebookSession, retrieve = retrieveFixture }) {
+export async function runSeek({ transcription, image, createSession = createPiNotebookSession, retrieve = retrieveUnconfigured }) {
   if (!transcription?.trim()) return { status: "needs_transcription" };
   const requestRetrieval = cacheRequestRetrieval(retrieve);
   const session = await createSession({ retrieve: requestRetrieval });
@@ -27,6 +30,7 @@ export async function runSeek({ transcription, image, createSession = createPiNo
     await session.prompt(prompt, { images });
     await session.waitForIdle();
     const graph = await requestRetrieval(transcription);
+    if (graph?.kind === "graph_unconfigured") return { status: "graph_unconfigured" };
     return { status: "ok", outcome: normalizeSeekOutcome({ transcription: transcription.trim(), raw: textFromLastAssistant(session), graph }) };
   } finally {
     session.dispose();
