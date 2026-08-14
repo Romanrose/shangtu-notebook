@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
@@ -29,7 +30,9 @@ async function readJson(request) {
 }
 
 export function seekNotebook(input) {
-  return process.env.NOTEBOOK_FIXTURE_MODE === "1" ? runFixtureSeek(input) : runSeek(input);
+  return process.env.NOTEBOOK_FIXTURE_MODE === "1"
+    ? runFixtureSeek(input)
+    : runSeek({ ...input, retrieve: createCnkgraphGatewayRetriever() });
 }
 
 export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekNotebook } = {}) {

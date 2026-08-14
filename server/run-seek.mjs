@@ -17,11 +17,12 @@ function cacheRequestRetrieval(retrieve) {
 function retrieveUnconfigured(query) {
   return { kind: "graph_unconfigured", query };
 }
+retrieveUnconfigured.isConfigured = false;
 
 /** Future /api/seek boundary. Image stays opaque until the replaceable vision step. */
 export async function runSeek({ transcription, image, createSession = createPiNotebookSession, retrieve = retrieveUnconfigured }) {
   if (!transcription?.trim()) return { status: "needs_transcription" };
-  if (retrieve === retrieveUnconfigured) return { status: "graph_unconfigured" };
+  if (retrieve.isConfigured === false) return { status: "graph_unconfigured" };
   const requestRetrieval = cacheRequestRetrieval(retrieve);
   const session = await createSession({ retrieve: requestRetrieval });
   if (!session) return { status: "model_unconfigured" };
@@ -31,7 +32,7 @@ export async function runSeek({ transcription, image, createSession = createPiNo
     await session.prompt(prompt, { images });
     await session.waitForIdle();
     const graph = await requestRetrieval(transcription);
-    if (graph?.kind === "graph_unconfigured") return { status: "graph_unconfigured" };
+    if (graph?.kind === "graph_unconfigured" || graph?.kind === "graph_timed_out" || graph?.kind === "graph_unavailable") return { status: graph.kind };
     return { status: "ok", outcome: normalizeSeekOutcome({ transcription: transcription.trim(), raw: textFromLastAssistant(session), graph }) };
   } finally {
     session.dispose();

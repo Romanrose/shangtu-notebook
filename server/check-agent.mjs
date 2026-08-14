@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { CNKGRAPH_GATEWAY_LIMITS, createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
 import { allowedTools, clarify, createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
 import { retrieveFixture } from "./cnkgraph-fixture.mjs";
 import { createNotebookServer } from "./notebook-server.mjs";
@@ -48,6 +49,34 @@ if (evidence.nodes.length !== 2 || evidence.edges.length !== 1) throw new Error(
 if (!evidence.sources.every((source) => source.url && source.claim)) throw new Error("CNKGraph 演示夹具的来源不可追溯。");
 const gap = await retrieveFixture("珊瑚与唐诗");
 if (gap.kind !== "evidence_gap" || gap.sources.length !== 0) throw new Error("证据缺口夹具边界错误。");
+let unconfiguredGatewayFetches = 0;
+const unconfiguredGateway = createCnkgraphGatewayRetriever({ fetchImpl: async () => {
+  unconfiguredGatewayFetches++;
+  throw new Error("unconfigured gateway must not fetch");
+} });
+if ((await unconfiguredGateway("李白写过《将进酒》吗？")).kind !== "graph_unconfigured" || unconfiguredGateway.isConfigured !== false || unconfiguredGatewayFetches !== 0) throw new Error("未配置图谱 gateway 没有安全停止。");
+const gatewayEvidence = {
+  kind: "evidence",
+  nodes: [{ id: "person:li-bai", label: "李白", type: "Person" }, { id: "work:jiangjinjiu", label: "将进酒", type: "Work" }],
+  edges: [{ source: "person:li-bai", relation: "作者", target: "work:jiangjinjiu", evidenceRefs: ["source:jiangjinjiu"] }],
+  sources: [{ id: "source:jiangjinjiu", label: "固定来源", url: "https://source.test/jiangjinjiu", claim: "来源支持该作者关系。" }],
+};
+let gatewayRequest;
+const configuredGateway = createCnkgraphGatewayRetriever({
+  endpoint: "https://gateway.test/seek",
+  authToken: "server-only-token",
+  fetchImpl: async (url, options) => {
+    gatewayRequest = { url, options };
+    return { ok: true, json: async () => gatewayEvidence };
+  },
+});
+const configuredGatewayResult = await configuredGateway("李白写过《将进酒》吗？");
+const gatewayBody = JSON.parse(gatewayRequest?.options?.body ?? "null");
+if (configuredGateway.isConfigured !== true || gatewayRequest?.url !== "https://gateway.test/seek" || gatewayRequest.options.headers.Authorization !== "Bearer server-only-token" || gatewayRequest.options.signal?.aborted || gatewayBody?.query !== "李白写过《将进酒》吗？" || JSON.stringify(gatewayBody?.limits) !== JSON.stringify(CNKGRAPH_GATEWAY_LIMITS) || configuredGatewayResult.kind !== "evidence" || configuredGatewayResult.sources.length !== 1) throw new Error("图谱 gateway 没有保持服务端认证、有界查询或来源映射。");
+const unavailableGateway = createCnkgraphGatewayRetriever({ endpoint: "https://gateway.test/seek", authToken: "server-only-token", fetchImpl: async () => ({ ok: false }) });
+if ((await unavailableGateway("李白")).kind !== "graph_unavailable") throw new Error("图谱 gateway 的 HTTP 故障没有显式降级。");
+const timedOutGateway = createCnkgraphGatewayRetriever({ endpoint: "https://gateway.test/seek", authToken: "server-only-token", timeoutMs: 1, fetchImpl: () => new Promise(() => {}) });
+if ((await timedOutGateway("李白")).kind !== "graph_timed_out") throw new Error("图谱 gateway 超时没有显式降级。");
 const verifiedEvidence = normalizeSeekOutcome({
   transcription: "李白写过《将进酒》吗？",
   raw: JSON.stringify({ kind: "evidence", text: "李白生活在盛唐。", sourceIds: ["source:jiangjinjiu-li-bai"], path: ["李白", "作者", "将进酒"], association: "可从酒诗再读。" }),

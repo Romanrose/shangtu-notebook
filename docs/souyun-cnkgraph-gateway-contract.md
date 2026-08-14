@@ -40,6 +40,8 @@ confirmed transcription
 
 `query` 上限为 160 个字符。服务端必须给请求传入 `AbortSignal`；超时不得重试或回退到 fixture。
 
+当前 adapter 仅支持受控 gateway 的 HTTPS 地址，并以服务端 `CNKGRAPH_GATEWAY_AUTH_TOKEN` 组成 `Authorization: Bearer …` 请求头；这是内部 gateway 约定，不是对搜韵认证方式的假设。真实搜韵认证的转换必须留在该 gateway 后面。
+
 ## Gateway 成功响应（内部归一形状）
 
 ```json
