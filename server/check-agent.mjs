@@ -133,7 +133,7 @@ const huaweiResponse = { result: { words_block_count: 2, words_block_list: [{ wo
 const huaweiAbortController = new AbortController();
 const huaweiResult = await invokeHuaweiHandwriting({ image: sizedInk, endpoint: "https://ocr.test/", projectId: "project-test", authToken: "server-only-token", charSet: "general", signal: huaweiAbortController.signal, fetchImpl: async (url, options) => {
   const body = JSON.parse(options.body);
-  if (url !== "https://ocr.test/v2/project-test/ocr/handwriting" || options.method !== "POST" || options.headers["X-Auth-Token"] !== "server-only-token" || options.signal !== huaweiAbortController.signal || body.image !== sizedInk.data.slice("data:image/png;base64,".length) || body.quick_mode !== true || body.char_set !== "general" || body.detect_direction !== false) throw new Error("华为手写 OCR 请求合同或服务端凭据边界错误。");
+  if (url !== "https://ocr.test/v2/project-test/ocr/handwriting" || options.method !== "POST" || options.headers["X-Auth-Token"] !== "server-only-token" || options.signal !== huaweiAbortController.signal || body.image !== sizedInk.data.slice("data:image/png;base64,".length) || body.quick_mode !== false || body.char_set !== "general" || body.detect_direction !== false) throw new Error("华为手写 OCR 请求合同或服务端凭据边界错误。");
   return { ok: true, json: async () => huaweiResponse };
 } });
 if (huaweiResult?.text !== "123李白" || huaweiResult.lines?.length !== 2 || huaweiResult.lines?.[0].box.x !== 0.1 || huaweiResult.lines?.[1].box.width !== 0.5) throw new Error("华为手写 OCR 响应没有映射为统一转写合同。");

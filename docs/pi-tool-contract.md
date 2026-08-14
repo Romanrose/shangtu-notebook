@@ -11,7 +11,7 @@ Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项�
 
 `/api/transcribe` 的成功响应固定为 `{ status: "ok", transcription, providerStatus }`。`transcription.text` 是待确认主文本，`candidates` 是至多三个不同的备选文本，`lines`（如服务商提供）只包含相对于裁剪 PNG 的 `0–1` 行框与行文本。`providerStatus` 只表达 `fixture`、`ready`、`unconfigured`、`not_implemented`、`rejected`、`unavailable` 或 `timed_out` 等非敏感运行状态；不得返回密钥、供应商请求详情或原始模型推理。真实服务调用必须经过服务端 8 秒限时包装，并接收 `AbortSignal`；超时返回 `vision_timed_out`，调用异常或无效结果返回 `vision_unavailable`。失败也必须返回明确状态，不能编造转写。
 
-速度优先实验候选 `huawei-handwriting` 只在服务端同时配置 `HUAWEI_OCR_ENDPOINT`、`HUAWEI_OCR_PROJECT_ID` 与短期 `HUAWEI_OCR_AUTH_TOKEN` 时启用。它通过华为云 REST 的 `X-Auth-Token` 头提交当前笔迹段裁剪 PNG 的**原始 Base64**，支持 `general` 与 `digit` 字符集；`HUAWEI_OCR_QUICK_MODE=1` 仅可用于单行且文字占比足够高的紧裁剪段。适配器把 `words_block_list` 的文字和相对行框收敛为可编辑转写，token、endpoint、项目 ID、供应商错误详情和原始推理均不会返回浏览器、Pi 或日志。未配置时不发起请求并返回 `vision_unconfigured`；本仓库不提供真实凭据，也不将 fixture 当作模型回退。
+速度优先实验候选 `huawei-handwriting` 只在服务端同时配置 `HUAWEI_OCR_ENDPOINT`、`HUAWEI_OCR_PROJECT_ID` 与短期 `HUAWEI_OCR_AUTH_TOKEN` 时启用。它通过华为云 REST 的 `X-Auth-Token` 头提交当前笔迹段裁剪 PNG 的**原始 Base64**，支持 `general` 与 `digit` 字符集；`HUAWEI_OCR_QUICK_MODE` 默认 `0`，只有确认是单行且文字占比足够高的紧裁剪段时才可显式设为 `1`。适配器把 `words_block_list` 的文字和相对行框收敛为可编辑转写，token、endpoint、项目 ID、供应商错误详情和原始推理均不会返回浏览器、Pi 或日志。未配置时不发起请求并返回 `vision_unconfigured`；本仓库不提供真实凭据，也不将 fixture 当作模型回退。
 
 实验分支可选的 `vlm-openai-compatible` provider 只在服务端读取 `VISION_VLM_ENDPOINT`、`VISION_VLM_API_KEY` 和 `VISION_MODEL_ID`，向兼容 Chat Completions 的视觉接口发送当前 PNG；密钥不会进入浏览器、日志或转写响应。模型结果只作为可编辑机器转写，不能直接触发寻迹或写入事实旁批。
 
