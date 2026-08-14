@@ -98,6 +98,16 @@ SABER_PI_FIXTURE_SCENARIO=ambiguous node spikes/saber-pi/bridge.mjs
 
 该变量不能选择真实模型、图谱、网络或工具，也不会被普通 notebook server 读取；未知值会拒绝启动。
 
+真实服务配置统一保存在本机、已被 Git 忽略的 `.env`。从模板创建后先运行预检，再以 npm 命令启动 Spike：
+
+```bash
+cp .env.example .env # 当前机器已有空白 .env 时，直接编辑该文件
+npm run preflight:services
+npm run serve:saber-pi
+```
+
+`SABER_PI_TRANSCRIPTION_PROVIDER`/`SABER_PI_TRANSCRIPTION_MODEL_ID` 只影响这个 bridge；华为 endpoint、项目 ID 和短期 token 仍只在 Node 进程的 `HUAWEI_OCR_*` 变量中。不要把任何实际值发送到聊天或加入 Git。
+
 如果受控服务端已按现有转写合同配置好 provider，运维人员才可在 Node 进程中显式选择它：
 
 ```bash
