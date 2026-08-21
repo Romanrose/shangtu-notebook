@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { getDemoCase, isJourneyDemo, makeDemoCandidateOutcome, makeDemoJourneyOutcome, makeDemoOutcome, type TraceOutcome } from "./demo-agent";
 import { loadNotebookState, saveNotebookState } from "./notebook-store";
 import { PaperReply } from "./modules/paper-reply/PaperReply";
+import { ScrollOpening } from "./modules/scroll-opening/ScrollOpening";
 import "./styles.css";
 
 if ("serviceWorker" in navigator) {
@@ -1058,14 +1059,17 @@ function Notebook() {
   const allJourneyEvidenceCollected = journeyEvidenceAnnotations.length > 0 && journeyEvidenceAnnotations.every((annotation) => annotation.isCollected);
   const ritual = journey ? journeyRitual(journey) : null;
 
-  return <main className="book-shell">
-    <header className="book-spine">
-      <div className="title-mark">时空探索手札</div>
-      <button className="mode-toggle" onClick={toggleMode} aria-pressed={mode === "seek"}>
-        {mode === "seek" ? "寻迹" : "静读"}
-      </button>
-    </header>
-    <section className={`paper ink-${inkState}`} aria-label="可书写纸页">
+  return <>
+    <ScrollOpening />
+    <main className="book-shell">
+      <header className="book-spine">
+        <div className="title-mark">时空探索手札</div>
+        <button className="mode-toggle" onClick={toggleMode} aria-pressed={mode === "seek"}>
+          {mode === "seek" ? "寻迹" : "静读"}
+        </button>
+      </header>
+      <div className="paper-stage">
+      <section className={`paper ink-${inkState}`} aria-label="可书写纸页">
       <div className="paper-grain" />
       <div className="page-number">札记 · {String(pageIndex + 1).padStart(2, "0")}</div>
       <p className="quiet-note">{prompt}</p>
@@ -1082,8 +1086,10 @@ function Notebook() {
       <nav className="page-turns" aria-label="翻页"><button onClick={() => turnPage(pageIndex - 1)} disabled={pageIndex === 0}>前页</button><span>{pageIndex + 1} / {pages.length}</span><button onClick={() => turnPage(pageIndex + 1)} disabled={pageIndex === pages.length - 1}>后页</button></nav>
       <button className="new-page-mark" onClick={newPage} aria-label={journey ? "续写一页札记" : "新建一页札记"}>{journey ? "续页" : "新页"}</button>
       <button className="clear-page-mark" onClick={clearCurrentPage} aria-label="清空当前页">清空</button>
-    </section>
-  </main>;
+      </section>
+      </div>
+    </main>
+  </>;
 }
 
 function MarginNotes({ annotation, index, showTrace, canSeek, onTrace, onCandidate, onCollect }: { annotation: PageAnnotation; index: number; showTrace: boolean; canSeek: boolean; onTrace: () => void; onCandidate: (candidate: string) => void; onCollect: () => void }) {
