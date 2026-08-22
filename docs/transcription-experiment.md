@@ -5,7 +5,7 @@
 ## 分阶段比较
 
 1. 图像 OCR / HTR：先比较一项自托管中文手写 OCR 与一项托管手写 OCR。它们直接复用当前 PNG 接口。
-2. VLM 复核：当前实验分支提供 `vlm-openai-compatible` 适配器，适用于兼容 Chat Completions 的本地或托管视觉接口；输出仍须经过 `createTranscription` 收敛，绝不能直接寻迹或写事实旁批。
+2. VLM 复核：当前实验分支提供 `vlm-openai-compatible` 通用适配器，以及复用 `DEEPSEEK_API_KEY` 的 `deepseek-vision` 显式适配器；两者输出仍须经过 `createTranscription` 收敛，绝不能直接寻迹或写事实旁批。
 3. 数字墨水：未来原生壳保留笔画坐标与时序后再单独评估；它不是当前纯 PWA 的替换实现。
 
 速度优先的第一托管候选是 `huawei-handwriting`，而不是把经典 Tesseract 当成生产识别器。它只接收本次笔迹段的紧裁剪 PNG；数字样本以 `HUAWEI_OCR_CHAR_SET=digit` 另建 cohort，中文短句以 `general` 另建 cohort，不能混合报告。只有确认裁剪图满足单行和文字占比要求时，才开启 `HUAWEI_OCR_QUICK_MODE=1`；该开关是否实际改善 p50/p95，必须由同一批获同意的平板笔迹测量决定。真实测试前，服务端须单独配置 endpoint、项目 ID 和短期 token；这些值、原始笔迹和报告均不得提交仓库。
@@ -183,6 +183,20 @@ npm run bench:transcription
 ```
 
 适配器要求模型只返回 `{ "text": "...", "candidates": ["..."] }`；若模型返回普通文本，也只会作为待确认文本保留。它不使用模型输出的日期、来源或人物关系，因此不会扩大证据边界。
+
+DeepSeek 官方视觉模型的对照不需要通用 VLM endpoint 或第二份 key；使用同一份经同意样本清单运行：
+
+```bash
+TRANSCRIPTION_BENCH_PROVIDER=deepseek-vision \
+VISION_MODEL_ID=deepseek-v4-flash-vision-exp \
+DEEPSEEK_API_KEY=<server-side-only-token> \
+TRANSCRIPTION_BENCHMARK_MANIFEST=/absolute/path/to/manifest.json \
+TRANSCRIPTION_BENCH_RUNS=5 \
+TRANSCRIPTION_BENCH_WARMUP=1 \
+npm run bench:transcription
+```
+
+它会固定调用官方 Chat Completions 视觉端点；报告仍只能留在本机受控目录。只有把这份报告与同 cohort 的 OCR 报告一起经过比较器检查，才可以得出“更准确”或“更适合作为默认 provider”的结论。
 
 PaddleOCR-VL 的本地完整 pipeline 可按官方文档用 `paddlex --serve --pipeline PaddleOCR-VL` 启动；服务端 endpoint 通常是 `http://127.0.0.1:8080/layout-parsing`。官方说明本地快速验证可能较慢，因此必须把模型下载/加载与稳态推理分开记录。[官方 PaddleOCR-VL 服务说明](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/PaddleOCR-VL.html)
 

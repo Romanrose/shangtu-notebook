@@ -29,6 +29,12 @@ function inspectOcrConfiguration(env) {
     return { status: "ocr_ready_for_controlled_call", provider };
   }
 
+  if (provider === "deepseek-vision") {
+    return configured(env, ["DEEPSEEK_API_KEY"])
+      ? { status: "ocr_ready_for_controlled_call", provider }
+      : { status: "ocr_auth_or_model_missing", provider };
+  }
+
   const endpointByProvider = {
     paddleocr: "PADDLEOCR_ENDPOINT",
     "paddleocr-vl": "PADDLEOCR_VL_ENDPOINT",

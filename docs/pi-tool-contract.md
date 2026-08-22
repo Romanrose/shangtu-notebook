@@ -17,6 +17,8 @@ Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项�
 
 实验分支可选的 `vlm-openai-compatible` provider 只在服务端读取 `VISION_VLM_ENDPOINT`、`VISION_VLM_API_KEY` 和 `VISION_MODEL_ID`，向兼容 Chat Completions 的视觉接口发送当前 PNG；密钥不会进入浏览器、日志或转写响应。模型结果只作为可编辑机器转写，不能直接触发寻迹或写入事实旁批。
 
+`deepseek-vision` 是针对 DeepSeek 官方 `deepseek-v4-flash-vision-exp` 的显式 OCR provider：固定调用官方 Chat Completions 端点，并只读取服务端 `DEEPSEEK_API_KEY` 与可选 `VISION_MODEL_ID`。它复用同一份当前裁剪 PNG 与统一转写合同，不复制密钥到通用 VLM 配置，也不会把图像或密钥交给 Pi、浏览器或日志。
+
 实验分支也支持服务端自托管的 `paddleocr-vl` provider；它只向配置的 `PADDLEOCR_VL_ENDPOINT`（官方完整 pipeline 的 `/layout-parsing`）发送当前 PNG，响应中的 `parsing_res_list[].block_content` 只作为可编辑机器转写。该 provider 不把 PaddleOCR-VL 的 Markdown、布局事实或视觉输出直接交给 Pi。
 
 实验分支还支持 `tesseract` 经典 OCR provider；它只在服务端读取 `TESSERACT_BIN`、`TESSDATA_PREFIX`、`TESSERACT_LANG` 和可选的 `TESSERACT_PSM`，将当前 PNG 字节通过 Tesseract stdin 处理，不写临时图像文件。仅 stdout 的纯文本会进入统一可编辑转写合同；进程错误、空输出或超时均安全降级，Tesseract 不获得 Pi 工具、CNKGraph 或浏览器凭据。
@@ -25,6 +27,6 @@ Pi 的文本输出只是提案，永远不能直接落页。服务端只接受 J
 
 当前仓库包含只读 `李白 → 作者 → 将进酒` CNKGraph 子图夹具，仅用于 `NOTEBOOK_FIXTURE_MODE=1` 的离线演示与合同测试。夹具内置固定版本的公开文本来源，并对夹具外查询返回“证据缺口”；它不依赖旧项目目录。正常模式没有注入正式检索器时在启动 Pi 前返回 `graph_unconfigured`，绝不回退或伪装成该演练图谱。正式版本替换该检索器，但必须保持相同的来源和有界路径语义。
 
-正式图谱 provider（包括未来的搜韵接入）必须只由服务端的 request-scoped retriever 调用：输入仅为用户已确认的短文本或实体，不包含 PNG、原始笔迹、Pi prompt 或用户历史；同一次 `/api/seek` 内 Pi 的 `retrieve_cnkgraph` 与最终证据核验共用缓存，不能重复对外检索。接入前必须具备 endpoint/认证的最小权限、使用与展示条款，以及每条边对应的稳定来源 ID、可展示 claim 和永久 URL；否则维持 `graph_unconfigured`，不发请求。外部检索还必须限制为最多 2 跳、8 节点、8 边、4 个来源，并将无授权、超时、限流、网络/格式错误与“上游明确无结果”区分处理，不能把系统故障伪装成证据缺口。具体交接字段和验收见 [搜韵 CNKGraph Gateway 合同](./souyun-cnkgraph-gateway-contract.md)。
+正式图谱 provider（包括当前搜韵 gateway）必须只由服务端的 request-scoped retriever 调用：输入仅为用户已确认的短文本或实体，不包含 PNG、原始笔迹、Pi prompt 或用户历史；同一次 `/api/seek` 内 Pi 的 `retrieve_cnkgraph` 与最终证据核验共用缓存，不能重复对外检索。部署前必须具备 endpoint/认证的最小权限、使用与展示条款，以及每条边对应的稳定来源 ID、可展示 claim 和永久 URL；否则维持 `graph_unconfigured`，不发请求。外部检索还必须限制为最多 2 跳、8 节点、8 边、4 个来源，并将无授权、超时、限流、网络/格式错误与“上游明确无结果”区分处理，不能把系统故障伪装成证据缺口。具体交接字段和验收见 [搜韵 CNKGraph Gateway 合同](./souyun-cnkgraph-gateway-contract.md)。
 
 开发者可在**服务端**设置 `NOTEBOOK_FIXTURE_MODE=1`，演练完整的 Canvas 截图、可编辑确认与受限寻迹链路。该模式只返回固定演练转写并生成受控 JSON 提案：不调用视觉模型、Pi 模型或网络，浏览器会明确标注“演练转写（未调用视觉模型）”。它不是模型回退，也不得用于真实用户回应；不设置时，视觉与 Pi 仍按各自的未配置状态安全降级。

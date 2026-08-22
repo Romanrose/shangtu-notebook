@@ -8,6 +8,8 @@ import { invokeTesseract } from "./providers/tesseract.mjs";
 const MAX_IMAGE_BYTES = 2_000_000;
 export const TRANSCRIPTION_TIMEOUT_MS = 8_000;
 export const fixtureTranscription = "李白写过《将进酒》吗？";
+export const DEEPSEEK_VISION_ENDPOINT = "https://api.deepseek.com/chat/completions";
+export const DEEPSEEK_VISION_MODEL_ID = "deepseek-v4-flash-vision-exp";
 
 function decodeDataUrl(image) {
   if (!image || typeof image !== "object") return null;
@@ -50,7 +52,7 @@ export async function runTranscriptionProvider({ invoke, timeoutMs = TRANSCRIPTI
 
 function providerLabel(provider, fixtureMode) {
   if (fixtureMode === true || fixtureMode === "1") return "fixture";
-  if (["huawei-handwriting", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"].includes(provider)) return provider;
+  if (["deepseek-vision", "huawei-handwriting", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"].includes(provider)) return provider;
   return provider ? "custom" : "unconfigured";
 }
 
@@ -59,18 +61,19 @@ function providerLabel(provider, fixtureMode) {
  * It deliberately accepts an opaque PNG and never exposes provider settings
  * or credentials to the browser.
  */
-export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE, endpoint = process.env.PADDLEOCR_ENDPOINT, vlEndpoint = process.env.PADDLEOCR_VL_ENDPOINT, huaweiEndpoint = process.env.HUAWEI_OCR_ENDPOINT, huaweiProjectId = process.env.HUAWEI_OCR_PROJECT_ID, huaweiAuthToken = process.env.HUAWEI_OCR_AUTH_TOKEN, huaweiCharSet = process.env.HUAWEI_OCR_CHAR_SET, huaweiQuickMode = process.env.HUAWEI_OCR_QUICK_MODE, huaweiDetectDirection = process.env.HUAWEI_OCR_DETECT_DIRECTION, tesseractBin = process.env.TESSERACT_BIN, tessdataPrefix = process.env.TESSDATA_PREFIX, tesseractLanguage = process.env.TESSERACT_LANG, tesseractPsm = process.env.TESSERACT_PSM, vlmEndpoint = process.env.VISION_VLM_ENDPOINT, vlmApiKey = process.env.VISION_VLM_API_KEY, invokeProvider, fetchImpl, spawnImpl }) {
+export async function transcribeInk({ image, provider = process.env.VISION_MODEL_PROVIDER, modelId = process.env.VISION_MODEL_ID, fixtureMode = process.env.NOTEBOOK_FIXTURE_MODE, endpoint = process.env.PADDLEOCR_ENDPOINT, vlEndpoint = process.env.PADDLEOCR_VL_ENDPOINT, huaweiEndpoint = process.env.HUAWEI_OCR_ENDPOINT, huaweiProjectId = process.env.HUAWEI_OCR_PROJECT_ID, huaweiAuthToken = process.env.HUAWEI_OCR_AUTH_TOKEN, huaweiCharSet = process.env.HUAWEI_OCR_CHAR_SET, huaweiQuickMode = process.env.HUAWEI_OCR_QUICK_MODE, huaweiDetectDirection = process.env.HUAWEI_OCR_DETECT_DIRECTION, tesseractBin = process.env.TESSERACT_BIN, tessdataPrefix = process.env.TESSDATA_PREFIX, tesseractLanguage = process.env.TESSERACT_LANG, tesseractPsm = process.env.TESSERACT_PSM, vlmEndpoint = process.env.VISION_VLM_ENDPOINT, vlmApiKey = process.env.VISION_VLM_API_KEY, deepseekApiKey = process.env.DEEPSEEK_API_KEY, invokeProvider, fetchImpl, spawnImpl }) {
   const label = providerLabel(provider, fixtureMode);
   if (!decodeDataUrl(image)) return { status: "invalid_ink", providerStatus: "rejected", provider: label };
   if (fixtureMode === true || fixtureMode === "1") {
     return { status: "ok", transcription: createTranscription({ text: fixtureTranscription }), providerStatus: "fixture", provider: label };
   }
-  if (!provider || !modelId) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
+  if (!provider || (!modelId && provider !== "deepseek-vision")) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (provider === "huawei-handwriting" && (!huaweiEndpoint || !huaweiProjectId || !huaweiAuthToken)) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (provider === "paddleocr" && !endpoint) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (provider === "paddleocr-vl" && !vlEndpoint) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (provider === "tesseract" && !tesseractBin) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (provider === "vlm-openai-compatible" && (!vlmEndpoint || !vlmApiKey)) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
+  if (provider === "deepseek-vision" && !deepseekApiKey) return { status: "vision_unconfigured", providerStatus: "unconfigured", provider: label };
   if (invokeProvider) return runTranscriptionProvider({ invoke: ({ signal }) => invokeProvider({ image, signal }) }).then((result) => ({ ...result, provider: label }));
   if (provider === "paddleocr" && endpoint) {
     return runTranscriptionProvider({ invoke: ({ signal }) => invokePaddleOcr({ image, endpoint, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
@@ -83,6 +86,9 @@ export async function transcribeInk({ image, provider = process.env.VISION_MODEL
   }
   if (provider === "tesseract" && tesseractBin) {
     return runTranscriptionProvider({ invoke: ({ signal }) => invokeTesseract({ image, command: tesseractBin, language: tesseractLanguage, tessdataPrefix, psm: tesseractPsm, signal, spawnImpl }) }).then((result) => ({ ...result, provider: label }));
+  }
+  if (provider === "deepseek-vision" && deepseekApiKey) {
+    return runTranscriptionProvider({ invoke: ({ signal }) => invokeOpenAiCompatibleVlm({ image, modelId: modelId || DEEPSEEK_VISION_MODEL_ID, endpoint: DEEPSEEK_VISION_ENDPOINT, apiKey: deepseekApiKey, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
   }
   if (provider === "vlm-openai-compatible" && vlmEndpoint && vlmApiKey) {
     return runTranscriptionProvider({ invoke: ({ signal }) => invokeOpenAiCompatibleVlm({ image, modelId, endpoint: vlmEndpoint, apiKey: vlmApiKey, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));

@@ -21,7 +21,7 @@ import { summarizeTranscriptionTimings } from "./summarize-transcription-timings
 import { compareTranscriptionReports } from "./compare-transcription-reports.mjs";
 import { orderTimingPayloadsByManifest, validateTranscriptionCohort } from "./preflight-transcription.mjs";
 import { createTranscription } from "./transcription-contract.mjs";
-import { fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
+import { DEEPSEEK_VISION_ENDPOINT, DEEPSEEK_VISION_MODEL_ID, fixtureTranscription, runTranscriptionProvider, transcribeInk } from "./transcription-adapter.mjs";
 
 const tinyInk = { mimeType: "image/png", data: "data:image/png;base64,iVBORw0KGgo=" };
 const sizedPng = Buffer.alloc(24);
@@ -49,6 +49,8 @@ const emptyServicesPreflight = inspectRealServicesConfiguration({ env: {} });
 if (emptyServicesPreflight.ocr.status !== "ocr_unconfigured" || emptyServicesPreflight.pi.status !== "pi_unconfigured" || emptyServicesPreflight.graph.status !== "graph_unconfigured" || emptyServicesPreflight.readyForOcrCall || emptyServicesPreflight.readyForSeekCall) throw new Error("真实服务空配置预检错误。");
 const missingHuaweiPreflight = inspectRealServicesConfiguration({ env: { SABER_PI_TRANSCRIPTION_PROVIDER: "huawei-handwriting" } });
 if (missingHuaweiPreflight.ocr.status !== "ocr_auth_or_endpoint_missing") throw new Error("华为 OCR 缺失配置预检错误。");
+const readyDeepseekVisionPreflight = inspectRealServicesConfiguration({ env: { VISION_MODEL_PROVIDER: "deepseek-vision", DEEPSEEK_API_KEY: "server-only-deepseek-token" } });
+if (!readyDeepseekVisionPreflight.readyForOcrCall || JSON.stringify(readyDeepseekVisionPreflight).includes("server-only-deepseek-token")) throw new Error("DeepSeek Vision 预检没有隐藏凭据或未识别配置。");
 const readyServicesPreflight = inspectRealServicesConfiguration({
   env: {
     SABER_PI_TRANSCRIPTION_PROVIDER: "huawei-handwriting",
@@ -244,6 +246,12 @@ const vlmResult = await invokeOpenAiCompatibleVlm({ image: tinyInk, modelId: "vi
 if (vlmResult?.text !== "李白是谁？" || vlmResult.candidates?.[0] !== "李白是哪位？") throw new Error("VLM JSON 响应没有映射为转写合同。");
 const configuredVlm = await transcribeInk({ image: tinyInk, provider: "vlm-openai-compatible", modelId: "vision-test", vlmEndpoint: "http://vlm.test/v1/chat/completions", vlmApiKey: "secret-test", fetchImpl: async () => ({ ok: true, json: async () => vlmResponse }) });
 if (configuredVlm.status !== "ok" || configuredVlm.providerStatus !== "ready" || configuredVlm.transcription?.text !== "李白是谁？") throw new Error("VLM 没有经过统一转写适配器。");
+const configuredDeepseekVision = await transcribeInk({ image: tinyInk, provider: "deepseek-vision", deepseekApiKey: "server-only-deepseek-token", fetchImpl: async (url, options) => {
+  const body = JSON.parse(options.body);
+  if (url !== DEEPSEEK_VISION_ENDPOINT || options.headers.Authorization !== "Bearer server-only-deepseek-token" || body.model !== DEEPSEEK_VISION_MODEL_ID || body.messages?.[0]?.content?.[1]?.image_url?.url !== tinyInk.data) throw new Error("DeepSeek Vision 请求合同或凭据边界错误。");
+  return { ok: true, json: async () => vlmResponse };
+} });
+if (configuredDeepseekVision.status !== "ok" || configuredDeepseekVision.provider !== "deepseek-vision" || configuredDeepseekVision.transcription?.text !== "李白是谁？") throw new Error("DeepSeek Vision 没有经过统一转写适配器。");
 const normalizedTranscription = createTranscription({ text: "  李白是谁？ ", candidates: ["李白是谁？", "李白的字是什么？"], lines: [{ text: "李白是谁？", box: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 } }, { text: "越界", box: { x: 0.9, y: 0.1, width: 0.2, height: 0.1 } }] });
 if (normalizedTranscription?.text !== "李白是谁？" || normalizedTranscription.candidates.length !== 1 || normalizedTranscription.lines?.length !== 1) throw new Error("转写合同没有收敛文本、候选与相对行框。");
 if (characterErrorRate("李白", "李賀") !== 1 / 2 || characterErrorRate("", "李白") !== 1) throw new Error("中文字符错误率计算错误。");

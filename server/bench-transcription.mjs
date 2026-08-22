@@ -34,7 +34,7 @@ async function loadCases(manifestPath, { allowUnlabeled = false } = {}) {
 const provider = process.env.TRANSCRIPTION_BENCH_PROVIDER ?? process.env.VISION_MODEL_PROVIDER ?? "fixture";
 const providers = (process.env.TRANSCRIPTION_BENCH_PROVIDERS ?? provider).split(",").map((value) => value.trim()).filter(Boolean);
 const manifestPath = process.env.TRANSCRIPTION_BENCHMARK_MANIFEST;
-if (!providers.length || providers.some((candidate) => !["fixture", "huawei-handwriting", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"].includes(candidate))) throw new Error(`暂不支持实验 provider: ${providers.join(",")}`);
+if (!providers.length || providers.some((candidate) => !["fixture", "deepseek-vision", "huawei-handwriting", "paddleocr", "paddleocr-vl", "tesseract", "vlm-openai-compatible"].includes(candidate))) throw new Error(`暂不支持实验 provider: ${providers.join(",")}`);
 if (providers.some((candidate) => candidate !== "fixture") && !manifestPath) throw new Error("真实转写实验必须提供 TRANSCRIPTION_BENCHMARK_MANIFEST；不会使用合同夹具冒充真实样本。");
 const allowUnlabeled = process.env.TRANSCRIPTION_BENCHMARK_UNLABELED === "1";
 const cases = await loadCases(manifestPath, { allowUnlabeled });
@@ -73,7 +73,7 @@ for (const candidate of providers) {
     warmup,
     transcribe: ({ image }) => candidate === "fixture"
       ? transcribeInk({ image, fixtureMode: true })
-      : transcribeInk({ image, provider: candidate, modelId: process.env.VISION_MODEL_ID ?? (candidate === "huawei-handwriting" ? "handwriting-v1" : candidate === "paddleocr" ? "PP-OCRv5" : candidate === "paddleocr-vl" ? "PaddleOCR-VL-0.9B" : candidate === "tesseract" ? (process.env.TESSERACT_LANG ?? "chi_sim") : undefined) }),
+      : transcribeInk({ image, provider: candidate, modelId: process.env.VISION_MODEL_ID ?? (candidate === "deepseek-vision" ? "deepseek-v4-flash-vision-exp" : candidate === "huawei-handwriting" ? "handwriting-v1" : candidate === "paddleocr" ? "PP-OCRv5" : candidate === "paddleocr-vl" ? "PaddleOCR-VL-0.9B" : candidate === "tesseract" ? (process.env.TESSERACT_LANG ?? "chi_sim") : undefined) }),
   });
   const summary = summarizeTranscriptionBenchmark(report);
   const reportOutput = showText ? report : report.map(({ expected, actual, ...result }) => result);
