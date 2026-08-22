@@ -1,6 +1,8 @@
-# 搜韵 CNKGraph Gateway 合同（接入前）
+# 搜韵 CNKGraph Gateway 合同
 
-状态：尚未配置或调用搜韵。本文件规定未来服务端 gateway 必须满足的**内部**合同；它不声称搜韵现有 API 使用这些路径、字段或认证方式。
+状态：仓库已实现服务端 gateway（`server/souyun-gateway-service.mjs`），可通过 `npm run serve:souyun-gateway` 启动；Notebook 侧的受控客户端在 `server/cnkgraph-gateway.mjs`。本文件规定两者之间的**内部**合同，不声称搜韵现有 API 使用这些路径、字段或认证方式。gateway 启动、真实探针和生产部署要求见 [操作与架构指南](operation-guide.md)。
+
+当前内部端点为：`GET /healthz`、`POST /anchor`、`POST /works`、`POST /seek`。后三者都必须携带服务端 Bearer token；浏览器和 Pi 不可直接调用。
 
 ## 位置与权限
 
@@ -17,7 +19,7 @@ confirmed transcription
 - 每次 `/api/seek` 创建 request-scoped retriever。Pi 调用与最终核验共享同一次查询缓存。
 - 每次查询最多 2 跳、8 个节点、8 条边、4 个来源；禁止分页、自由扩展或二次网络发现。
 
-## 接入前必须提供
+## 部署前必须复核
 
 1. 正式 API endpoint、版本、HTTP 方法和最小认证 scope；
 2. 产品使用、缓存、展示来源与数据处理条款；
@@ -29,7 +31,7 @@ confirmed transcription
 
 ## Gateway 请求（内部形状）
 
-未来 adapter 可以按搜韵真实协议转换，但对上游 gateway 的最小请求意图固定为：
+gateway 可以按搜韵真实协议转换，但 notebook 对 gateway 的最小请求意图固定为：
 
 ```json
 {
