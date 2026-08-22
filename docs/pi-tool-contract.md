@@ -7,7 +7,7 @@ Pi 不是开放式文件/网络代理。产品运行时只允许四个工具：
 3. `validate_evidence`：没有来源引用的事实性旁批不得通过。
 4. `compose_annotation`：写出不超过 120 字的纸页旁批，类型只能是证据、联想、澄清或证据缺口。
 
-Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项目上下文；运行时还会核验实际激活工具是否恰为以上四个。模型凭据尚未配置时，Pi 会话不得启动；纸页本地“识字中”反馈仍可运行。浏览器只把当前笔迹区域 PNG 交给服务端 `/api/transcribe`，收到机器转写后由用户在纸页边编辑确认；服务端 `/api/seek` 才把确认转写与同一 PNG 交给 Pi。浏览器不持有模型、视觉模型或 CNKGraph 凭据。
+Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项目上下文；运行时还会核验实际激活工具是否恰为以上四个。模型凭据尚未配置时，Pi 会话不得启动；纸页本地“识字中”反馈仍可运行。浏览器只把当前笔迹区域 PNG 交给服务端 `/api/transcribe`，收到机器转写后由用户在纸页边编辑确认；服务端 `/api/seek` 只把确认转写和有界图谱证据交给 Pi，原始笔迹 PNG 不会发送给 Pi。浏览器不持有模型、视觉模型或 CNKGraph 凭据。
 
 在填入任何真实模型认证前，可在受控服务端运行 `npm run preflight:pi`。它只检查 `PI_MODEL_PROVIDER`/`PI_MODEL_ID` 是否命中本地 Pi catalog，以及该 provider 是否发现已知的服务端认证环境变量；不会读取或输出凭据值，也不会发起模型请求。`pi_ready_for_controlled_call` 只表示静态配置可进入下一步受控测试，不代表模型、来源或纸面事实已验证。需要同时核对 OCR、Pi 和图谱 gateway 时运行 `npm run preflight:services`；它只输出每一层的非敏感就绪状态，绝不输出 endpoint、项目 ID、token 或 API key，也不会发起网络调用。
 

@@ -51,12 +51,13 @@ export function createSouyunSnapshotRetriever({
     const target = edge && sourceUrl ? nodeById.get(edge.target) : null;
     if (!edge || !source || !target) return { kind: "evidence_gap", query: text, reason: "搜韵快照缺少可展示的作品关系来源。", sources: [] };
     const id = sourceId(sourceUrl);
+    const relation = edge.relation === "wrote" ? "作者" : edge.relation;
     return {
       kind: "evidence",
       query: text,
       nodes: [source, target].map(({ id: nodeId, label, type }) => ({ id: nodeId, label, type })),
-      edges: [{ source: edge.source, relation: edge.relation, target: edge.target, evidenceRefs: [id] }],
-      sources: [{ id, label: "搜韵 CNKGraph 审计快照", url: sourceUrl, claim: `搜韵 CNKGraph 快照记录：${source.label}${edge.relation}${target.label}。` }],
+      edges: [{ source: edge.source, relation, target: edge.target, evidenceRefs: [id] }],
+      sources: [{ id, label: "搜韵 CNKGraph 审计快照", url: sourceUrl, claim: `搜韵 CNKGraph 快照记录：${source.label}是《${target.label}》的作者。` }],
     };
   };
   retrieve.isConfigured = true;
