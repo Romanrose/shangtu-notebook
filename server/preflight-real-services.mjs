@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 function isHttpUrl(value, { httpsOnly = false } = {}) {
   try {
     const url = new URL(value);
-    return httpsOnly ? url.protocol === "https:" : ["http:", "https:"].includes(url.protocol);
+    if (!httpsOnly) return ["http:", "https:"].includes(url.protocol);
+    // 与适配器一致的例外：本地回环 http 允许（开发期接入同机 gateway）。
+    if (url.protocol === "https:") return true;
+    return url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   } catch {
     return false;
   }

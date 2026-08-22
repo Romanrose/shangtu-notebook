@@ -112,7 +112,7 @@ const snapshotGraph = {
 };
 const snapshotRetriever = createSouyunSnapshotRetriever({ enabled: true, graphs: [snapshotGraph] });
 const snapshotEvidence = await snapshotRetriever("李白");
-if (!snapshotRetriever.isConfigured || snapshotEvidence.kind !== "evidence" || snapshotEvidence.nodes.length !== 2 || snapshotEvidence.edges.length !== 1 || snapshotEvidence.sources.length !== 1 || (await snapshotRetriever("李白写过什么？")).kind !== "evidence_gap") throw new Error("搜韵快照没有保持精确确认、来源与证据缺口边界。");
+if (!snapshotRetriever.isConfigured || snapshotEvidence.kind !== "evidence" || snapshotEvidence.nodes.length !== 2 || snapshotEvidence.edges.length !== 1 || snapshotEvidence.edges[0]?.relation !== "作者" || snapshotEvidence.sources.length !== 1 || (await snapshotRetriever("李白写过什么？")).kind !== "evidence_gap") throw new Error("搜韵快照没有保持精确确认、来源与证据缺口边界。");
 const verifiedEvidence = normalizeSeekOutcome({
   transcription: "李白写过《将进酒》吗？",
   raw: JSON.stringify({ kind: "evidence", text: "李白生活在盛唐。", sourceIds: ["source:jiangjinjiu-li-bai"], path: ["李白", "作者", "将进酒"], association: "可从酒诗再读。" }),
