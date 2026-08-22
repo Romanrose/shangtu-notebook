@@ -24,7 +24,10 @@ function safeUrl(value) {
 function gatewayUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    // 生产要求 HTTPS；本地回环 http 仅用于开发期接入同机 gateway（无传输暴露面）。
+    if (url.protocol === "https:") return url.toString();
+    if (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) return url.toString();
+    return null;
   } catch {
     return null;
   }
@@ -32,6 +35,26 @@ function gatewayUrl(value) {
 
 function evidenceGap(query, reason) {
   return { kind: "evidence_gap", query, reason, sources: [] };
+}
+
+function safeTemporalSpatial(value) {
+  if (!value || typeof value !== "object") return null;
+  const bounded = (items, cap = 4) => Array.isArray(items)
+    ? items.map((item) => safeText(item, 120)).filter(Boolean).slice(0, cap)
+    : [];
+  const places = bounded(value.places);
+  const timeHints = bounded(value.timeHints);
+  const timeline = Array.isArray(value.timeline)
+    ? value.timeline
+        .map((point) => {
+          const year = Number(point?.year);
+          const label = safeText(point?.label, 120);
+          return Number.isInteger(year) && year > 0 && year <= 3000 && label ? { year, label } : null;
+        })
+        .filter(Boolean)
+        .slice(0, 4)
+    : [];
+  return places.length > 0 || timeHints.length > 0 || timeline.length > 0 ? { places, timeHints, timeline } : null;
 }
 
 function normalizeEvidenceGraph(value, query) {
@@ -69,12 +92,14 @@ function normalizeEvidenceGraph(value, query) {
   if (edges.some((edge) => !edge)) return evidenceGap(query, "图谱记录未通过关系来源核验。");
 
   const usedSourceIds = new Set(edges.flatMap((edge) => edge.evidenceRefs));
+  const temporalSpatial = safeTemporalSpatial(value.temporalSpatial);
   return {
     kind: "evidence",
     query,
     nodes,
     edges: edges.map(({ evidenceRefs: _evidenceRefs, ...edge }) => edge),
     sources: sources.filter((source) => usedSourceIds.has(source.id)),
+    ...(temporalSpatial ? { temporalSpatial } : {}),
   };
 }
 
@@ -85,10 +110,137 @@ function createUnconfiguredRetriever() {
 }
 
 /**
- * Internal, server-only gateway adapter. It deliberately knows no Souyun
- * endpoint shape: a future authorized gateway maps the upstream API into the
- * fixed request/response contract documented in docs/souyun-cnkgraph-gateway-contract.md.
+ * Gateway /works 客户端：人物作品列表。与 retrieve 同一认证与超时合同；
+ * 返回 works / person_ambiguous / evidence_gap / graph_* 状态。
  */
+export function createWorksResolver({
+  endpoint = process.env.CNKGRAPH_GATEWAY_ENDPOINT,
+  authToken = process.env.CNKGRAPH_GATEWAY_AUTH_TOKEN,
+  fetchImpl = fetch,
+  timeoutMs = CNKGRAPH_GATEWAY_TIMEOUT_MS,
+} = {}) {
+  const seekUrl = gatewayUrl(endpoint);
+  if (!seekUrl || !authToken) {
+    const resolve = async () => ({ kind: "graph_unconfigured" });
+    resolve.isConfigured = false;
+    return resolve;
+  }
+  const worksUrl = new URL(seekUrl);
+  worksUrl.pathname = worksUrl.pathname.replace(/\/seek\/?$/, "/works");
+
+  const resolve = async (person) => {
+    const name = safeText(person, 24);
+    if (!name) return { kind: "evidence_gap", reason: "人物名无效。" };
+    const controller = new AbortController();
+    let timer;
+    try {
+      const response = await Promise.race([
+        fetchImpl(worksUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ person: name }),
+          signal: controller.signal,
+        }),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error("graph_timed_out"));
+          }, timeoutMs);
+        }),
+      ]);
+      if (!response?.ok) return { kind: "graph_unavailable" };
+      const payload = await response.json();
+      if (payload?.kind === "works") {
+        const works = Array.isArray(payload.works)
+          ? payload.works
+              .map((work) => ({ id: work?.id, title: safeText(work?.title, 24), date: safeText(work?.date, 24), place: safeText(work?.place, 24) }))
+              .filter((work) => work.title)
+              .slice(0, 4)
+          : [];
+        if (works.length === 0) return { kind: "evidence_gap", reason: "诗文库暂无该人物可展示的作品列表。" };
+        return { kind: "works", name: safeText(payload.name, 24) ?? name, totalCount: Number(payload.totalCount) || works.length, works };
+      }
+      if (payload?.kind === "person_ambiguous") return { kind: "person_ambiguous", candidates: Array.isArray(payload.candidates) ? payload.candidates.slice(0, 4) : [] };
+      if (payload?.kind === "evidence_gap") return { kind: "evidence_gap", reason: safeText(payload.reason) ?? "诗文库没有该人物的记录。" };
+      return { kind: "graph_unavailable" };
+    } catch (error) {
+      return error instanceof Error && error.message === "graph_timed_out"
+        ? { kind: "graph_timed_out" }
+        : { kind: "graph_unavailable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  resolve.isConfigured = true;
+  return resolve;
+}
+
+/**
+ * Gateway /anchor 客户端：人物锚点解析。与 retrieve 同一认证与超时合同；
+ * 返回 person_anchor / person_ambiguous / evidence_gap / graph_* 状态。
+ */
+export function createAnchorResolver({
+  endpoint = process.env.CNKGRAPH_GATEWAY_ENDPOINT,
+  authToken = process.env.CNKGRAPH_GATEWAY_AUTH_TOKEN,
+  fetchImpl = fetch,
+  timeoutMs = CNKGRAPH_GATEWAY_TIMEOUT_MS,
+} = {}) {
+  const seekUrl = gatewayUrl(endpoint);
+  if (!seekUrl || !authToken) {
+    const resolve = async () => ({ kind: "graph_unconfigured" });
+    resolve.isConfigured = false;
+    return resolve;
+  }
+  const anchorUrl = new URL(seekUrl);
+  // 内部约定：anchor 端点 = seek 端点结尾的 /seek 换成 /anchor；无该后缀时追加 /anchor。
+  anchorUrl.pathname = /\/seek\/?$/.test(anchorUrl.pathname)
+    ? anchorUrl.pathname.replace(/\/seek\/?$/, "/anchor")
+    : `${anchorUrl.pathname.replace(/\/+$/, "")}/anchor`;
+
+  const resolve = async (person, dynastyHint = null) => {
+    const name = safeText(person, 24);
+    if (!name) return { kind: "evidence_gap", reason: "人物名无效。" };
+    const controller = new AbortController();
+    let timer;
+    try {
+      const response = await Promise.race([
+        fetchImpl(anchorUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ person: name, ...(dynastyHint ? { dynasty: dynastyHint } : {}) }),
+          signal: controller.signal,
+        }),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error("graph_timed_out"));
+          }, timeoutMs);
+        }),
+      ]);
+      if (!response?.ok) return { kind: "graph_unavailable" };
+      const payload = await response.json();
+      if (payload?.kind === "person_anchor") return { kind: "person_anchor", anchor: payload.anchor };
+      if (payload?.kind === "person_ambiguous") return { kind: "person_ambiguous", candidates: Array.isArray(payload.candidates) ? payload.candidates.slice(0, 4) : [] };
+      if (payload?.kind === "evidence_gap") return { kind: "evidence_gap", reason: safeText(payload.reason) ?? "诗文库没有该人物的档案记录。" };
+      return { kind: "graph_unavailable" };
+    } catch (error) {
+      return error instanceof Error && error.message === "graph_timed_out"
+        ? { kind: "graph_timed_out" }
+        : { kind: "graph_unavailable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  resolve.isConfigured = true;
+  return resolve;
+}
+
 export function createCnkgraphGatewayRetriever({
   endpoint = process.env.CNKGRAPH_GATEWAY_ENDPOINT,
   authToken = process.env.CNKGRAPH_GATEWAY_AUTH_TOKEN,
