@@ -38,18 +38,30 @@ function evidenceSentence(path) {
 
 function evidenceOutcome(transcription, graph, response) {
   const path = evidencePath(graph);
-  const sourceIds = graph.sources.map((source) => source.id).sort();
-  const proposedIds = Array.isArray(response.sourceIds) ? [...response.sourceIds].sort() : [];
   const exactPath = Array.isArray(response.path) && response.path.length === path.length && response.path.every((part, index) => part === path[index]);
-  const exactSources = proposedIds.length === sourceIds.length && proposedIds.every((id, index) => id === sourceIds[index]);
-  if (!exactPath || !exactSources || !path.every(Boolean)) return null;
+  // 来源核验：提案必须引用至少一个真实来源，且不得出现图谱之外的 id（子集即可，
+  // 全量匹配会把只引用部分来源的合法提案误判为缺口）。
+  const graphSourceIds = new Set(graph.sources.map((source) => source.id));
+  const proposedIds = Array.isArray(response.sourceIds) ? [...new Set(response.sourceIds)] : [];
+  const sourcesValid = proposedIds.length > 0 && proposedIds.every((id) => graphSourceIds.has(id));
+  if (!exactPath || !sourcesValid || !path.every(Boolean)) return null;
+  const proposedSet = new Set(proposedIds);
+  const verifiedSources = graph.sources.filter((source) => proposedSet.has(source.id));
+  // 二级时空索引：只从 gateway 归一化的 temporalSpatial 透传，服务端不再加工。
+  const index = graph.temporalSpatial;
+  const places = Array.isArray(index?.places) ? index.places.slice(0, 4) : undefined;
+  const timeHints = Array.isArray(index?.timeHints) ? index.timeHints.slice(0, 4) : undefined;
+  const timeline = Array.isArray(index?.timeline) ? index.timeline.slice(0, 4) : undefined;
   return {
     kind: "evidence",
     transcription,
     evidence: evidenceSentence(path),
     association: associationFrom(response.association),
-    source: graph.sources.map(({ label, url }) => ({ label, url })),
+    source: verifiedSources.map(({ label, url }) => ({ label, url })),
     path,
+    ...(places && places.length > 0 ? { places } : {}),
+    ...(timeHints && timeHints.length > 0 ? { timeHints } : {}),
+    ...(timeline && timeline.length > 0 ? { timeline } : {}),
   };
 }
 
