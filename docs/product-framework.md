@@ -8,7 +8,7 @@
 
 ## 范围与非目标
 
-首版先覆盖苏轼的一条稳定演示路径，并将已确认的人物名作为叙事锚点；当前受控搜韵开放 API 已支持人物档案与“人物—作品—路线词”的有限检索，但不宣称覆盖全人物、全朝代图谱，也不进行历史推演。离线夹具仍用于无网络排练，真实服务只在服务端配置并通过预检后启用。
+当前实现以已确认人物作为叙事锚点：受控搜韵 gateway 提供人物档案、作品候选与“人物—作品—路线词”的有限检索，但不宣称覆盖全人物、全朝代图谱，也不进行历史推演。离线夹具仍用于无网络排练；真实服务只有在服务端完成 gateway、Pi 与可选 OCR 配置并通过预检后才启用。
 
 模型只能提出澄清、检索或旁批建议。事实正文、时间、地点和关系必须由服务端已验证的图谱边与来源生成；文化性补充必须显示“联想：”。
 
@@ -32,15 +32,18 @@ src/
   modules/paper-reply/         纸页回应文本与显字节奏
   notebook-store.ts            IndexedDB 原始笔迹与页面保存
 
-  server/
+server/
+  notebook-server.mjs          /api/transcribe、/api/seek、/api/narrative 边界
   transcription-adapter.mjs    受控 OCR 适配
-  run-seek.mjs                 受限寻迹编排
+  journey-agent.mjs            人物锚点、路线归一化、作品候选与联想编排
+  run-seek.mjs                 Pi 会话与受限寻迹编排
   seek-outcome.mjs             路径、来源与旁批核验
-  souyun-open-api-retriever.mjs 人物档案与路线检索适配
+  cnkgraph-gateway.mjs         notebook 对 gateway 的认证、有界查询与响应校验
+  souyun-gateway-service.mjs   /anchor、/works、/seek 到搜韵 API 的转换
   cnkgraph-fixture.mjs         可替换的离线证据夹具
 ```
 
-浏览器只提交当前笔迹片段 PNG 与用户确认的短文本；OCR、Pi 与图谱凭据只存在于服务端。Pi 工具面固定为实体澄清、图谱检索、证据核验和旁批生成。
+开发期由 `vite.config.ts` 把三个 `/api/*` 路径装载到 `notebook-server.mjs`；独立部署时才启动 `npm run serve:api`。浏览器只提交当前笔迹片段 PNG 与用户确认的短文本；OCR、Pi 与图谱凭据只存在于服务端。Pi 工具面固定为实体澄清、图谱检索、证据核验和旁批生成。完整启动与调用顺序见 [操作与架构指南](operation-guide.md)。
 
 ## 数据合同
 
