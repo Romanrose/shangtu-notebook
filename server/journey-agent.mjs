@@ -1,4 +1,4 @@
-import { createAnchorResolver } from "./cnkgraph-gateway.mjs";
+import { createAnchorResolver, createWorksResolver } from "./cnkgraph-gateway.mjs";
 import { createPiNotebookSession, narrativeSystemPrompt } from "./notebook-agent.mjs";
 
 /**
@@ -33,8 +33,8 @@ function splitDynastyName(text) {
 
 /**
  * 旅程感知的问句归一化：锚点人物已知时，把「他写过将进酒吗」「《将进酒》」
- * 归一成「{人物}写过{作品}吗」，供 gateway 的槽位抽取使用。
- * 已含人物名的问句原样返回。
+ * 归一成「{人物}写过{作品}吗」；地点线上把「在{地点}写过什么」或裸地点归一成
+ * 「{人物}在{地点}写过什么」，供 gateway 的槽位抽取使用。已含人物名的问句原样返回。
  */
 export function normalizeJourneyQuery(transcription, journey) {
   const text = String(transcription ?? "").replace(/\s+/g, " ").trim();
@@ -44,6 +44,15 @@ export function normalizeJourneyQuery(transcription, journey) {
   // 「朝代·姓名」中的姓名部分也算已含人物名。
   const split = splitDynastyName(text);
   if (split && split.person === anchorName) return `${anchorName}写过什么吗`;
+  // 地点线：「他在嵩山写过什么」→「李白在嵩山写过什么」。
+  const placeQuestion = /^(?:他|她|其|此人)?的?在([\p{Script=Han}]{1,8}?)(?:写过什么|写过啥|留下过什么|留下过)(?:作品|笔墨|诗|词)?[吗呢吧？?。！，,]*$/u.exec(text);
+  if (placeQuestion) return `${anchorName}在${placeQuestion[1]}写过什么`;
+  // 地点路线上的裸地点词：「嵩山」→「李白在嵩山写过什么」（不含代词/「在」等结构词）。
+  if (journey?.route === "space" && /^[\p{Script=Han}]{1,6}$/u.test(text) && !PERSON_NOISE.test(text) && !/[他她其在此]/u.test(text)) {
+    return `${anchorName}在${text}写过什么`;
+  }
+  // 其余含「在」的结构不强行改写，交给 gateway 自行解析或给出问式缺口。
+  if (/在/.test(text)) return text;
   const book = /《([^《》]{1,60})》/u.exec(text);
   if (book) return `${anchorName}写过《${book[1]}》吗`;
   const withoutPronoun = text.replace(PRONOUN_PATTERN, "").replace(/^(的|写过|写过什么)/u, "");
@@ -51,6 +60,65 @@ export function normalizeJourneyQuery(transcription, journey) {
   if (!cleaned) return `${anchorName}写过什么吗`;
   // 「写过X」「有没有X」等剩余动词结构保持动词，只补人物主语。
   return `${anchorName}${cleaned.startsWith("写过") || cleaned.startsWith("作过") || cleaned.startsWith("创作") ? "" : "写过"}${cleaned}吗`;
+}
+
+/** 开放式作品问句：「他写过什么」「李白有哪些作品」「代表作」。 */
+const OPEN_WORKS_PATTERN = /(写过什么|写过哪些|留下过什么|有哪些作品|作品有哪些|有什么作品|什么作品|代表作)/u;
+
+export function isOpenWorksQuestion(transcription, journey) {
+  const text = String(transcription ?? "").replace(/\s+/g, "").trim();
+  if (!text || text.length > 60 || /《/.test(text)) return false;
+  // 含「在」的问句优先走地点流（「李白在嵩山写过什么」不是开放问句）。
+  if (/在/.test(text)) return false;
+  if (!OPEN_WORKS_PATTERN.test(text)) return false;
+  return Boolean(journey?.anchor?.trim()) || personFromOpenQuestion(text) !== null;
+}
+
+function personFromOpenQuestion(text) {
+  const match = /^([\p{Script=Han}·]{1,8}?)(?=写过什么|写过哪些|留下过什么|有哪些作品|作品有哪些|有什么作品|什么作品|代表作)/u.exec(text);
+  const candidate = match?.[1];
+  return candidate && isPersonName(candidate) ? candidate : null;
+}
+
+/**
+ * 开放式作品问句 → 真实作品列表候选（gateway /works）。
+ * 有旅程锚点时候选是裸书名（点选后由归一化补全人物）；
+ * 无锚点时候选是完整问句（点选后可独立走通证据链）。
+ */
+export async function resolveWorksOutcome({ transcription, journey, worksResolver = createWorksResolver() }) {
+  if (worksResolver.isConfigured === false) return { status: "graph_unconfigured" };
+  const text = String(transcription ?? "").trim();
+  const anchorName = typeof journey?.anchor === "string" && journey.anchor.trim() ? journey.anchor.trim() : null;
+  const person = anchorName ?? personFromOpenQuestion(text.replace(/\s+/g, ""));
+  if (!person) return null;
+  const resolution = await worksResolver(person);
+  if (resolution.kind === "works") {
+    const titles = resolution.works.map((work) => work.title).filter((title) => title && title.length <= 24).slice(0, 3);
+    if (titles.length === 0) {
+      return { status: "ok", outcome: { kind: "gap", transcription: text, gap: `诗文库暂无「${resolution.name}」可展示的作品列表。`, association: null } };
+    }
+    const candidates = anchorName ? titles : titles.map((title) => `${person}写过《${title}》吗`);
+    const count = Number.isFinite(resolution.totalCount) ? resolution.totalCount : titles.length;
+    return {
+      status: "ok",
+      outcome: {
+        kind: "ambiguous",
+        transcription: text,
+        clarification: `「${resolution.name}」名下诗文共 ${count} 首，先从哪一件继续寻迹？`,
+        candidates,
+      },
+    };
+  }
+  if (resolution.kind === "person_ambiguous") {
+    const candidates = resolution.candidates.map((candidate) => candidate?.name).filter((name) => typeof name === "string" && name.length <= 24);
+    if (candidates.length >= 2) {
+      return { status: "ok", outcome: { kind: "ambiguous", transcription: text, clarification: `诗文库有多位「${person}」，请点选或写明「朝代·姓名」：`, candidates } };
+    }
+  }
+  if (resolution.kind === "evidence_gap") {
+    return { status: "ok", outcome: { kind: "gap", transcription: text, gap: (resolution.reason ?? "诗文库没有该人物的记录。").slice(0, 200), association: null } };
+  }
+  return { status: resolution.kind };
 }
 
 /**

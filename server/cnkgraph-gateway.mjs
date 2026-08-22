@@ -110,6 +110,75 @@ function createUnconfiguredRetriever() {
 }
 
 /**
+ * Gateway /works 客户端：人物作品列表。与 retrieve 同一认证与超时合同；
+ * 返回 works / person_ambiguous / evidence_gap / graph_* 状态。
+ */
+export function createWorksResolver({
+  endpoint = process.env.CNKGRAPH_GATEWAY_ENDPOINT,
+  authToken = process.env.CNKGRAPH_GATEWAY_AUTH_TOKEN,
+  fetchImpl = fetch,
+  timeoutMs = CNKGRAPH_GATEWAY_TIMEOUT_MS,
+} = {}) {
+  const seekUrl = gatewayUrl(endpoint);
+  if (!seekUrl || !authToken) {
+    const resolve = async () => ({ kind: "graph_unconfigured" });
+    resolve.isConfigured = false;
+    return resolve;
+  }
+  const worksUrl = new URL(seekUrl);
+  worksUrl.pathname = worksUrl.pathname.replace(/\/seek\/?$/, "/works");
+
+  const resolve = async (person) => {
+    const name = safeText(person, 24);
+    if (!name) return { kind: "evidence_gap", reason: "人物名无效。" };
+    const controller = new AbortController();
+    let timer;
+    try {
+      const response = await Promise.race([
+        fetchImpl(worksUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ person: name }),
+          signal: controller.signal,
+        }),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(new Error("graph_timed_out"));
+          }, timeoutMs);
+        }),
+      ]);
+      if (!response?.ok) return { kind: "graph_unavailable" };
+      const payload = await response.json();
+      if (payload?.kind === "works") {
+        const works = Array.isArray(payload.works)
+          ? payload.works
+              .map((work) => ({ id: work?.id, title: safeText(work?.title, 24), date: safeText(work?.date, 24), place: safeText(work?.place, 24) }))
+              .filter((work) => work.title)
+              .slice(0, 4)
+          : [];
+        if (works.length === 0) return { kind: "evidence_gap", reason: "诗文库暂无该人物可展示的作品列表。" };
+        return { kind: "works", name: safeText(payload.name, 24) ?? name, totalCount: Number(payload.totalCount) || works.length, works };
+      }
+      if (payload?.kind === "person_ambiguous") return { kind: "person_ambiguous", candidates: Array.isArray(payload.candidates) ? payload.candidates.slice(0, 4) : [] };
+      if (payload?.kind === "evidence_gap") return { kind: "evidence_gap", reason: safeText(payload.reason) ?? "诗文库没有该人物的记录。" };
+      return { kind: "graph_unavailable" };
+    } catch (error) {
+      return error instanceof Error && error.message === "graph_timed_out"
+        ? { kind: "graph_timed_out" }
+        : { kind: "graph_unavailable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  resolve.isConfigured = true;
+  return resolve;
+}
+
+/**
  * Gateway /anchor 客户端：人物锚点解析。与 retrieve 同一认证与超时合同；
  * 返回 person_anchor / person_ambiguous / evidence_gap / graph_* 状态。
  */

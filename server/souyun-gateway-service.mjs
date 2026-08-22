@@ -51,8 +51,9 @@ function clampLimit(value, fallback, cap) {
   return Math.min(Math.floor(parsed), cap);
 }
 
-/** 问句槽位抽取：目前只支持「某人物写过某作品」式问句。 */
+/** 问句槽位抽取：支持「某人物写过某作品」与「某人物在某地写过（什么）」。 */
 const VERB_PATTERN = /(写过|写了|作过|创作过)/u;
+const PLACE_QUESTION = /^(.{1,24}?)(?:的)?在(.{1,16}?)(?=写过|留下过|作过|吗|呢|吧|？|。|！|，|,|$)/u;
 const PERSON_LEADING_NOISE = /^(?:请问|我想知道|是不是|是否|有没有|是)/u;
 const PERSON_TRAILING_NOISE = /(?:的|了|是不是|是否|有没有|吗|呢|吧)$/u;
 const WORK_TAIL_NOISE = /(?:吗|呢|吧|么|啊|没有)+$/u;
@@ -60,6 +61,21 @@ const WORK_TAIL_NOISE = /(?:吗|呢|吧|么|啊|没有)+$/u;
 export function extractSlots(rawQuery) {
   const query = collapseWhitespace(rawQuery);
   if (!query || query.length > QUERY_MAX_CHARS) return null;
+
+  // 地点线问句：「李白在嵩山写过什么」「李白在黄州写过《寒食帖》吗」。
+  // 注意「存在」等词也含「在」：guard 不通过时 fall through 到普通问句解析，
+  // 不整体拒绝（否则「完全不存在的人写过《将进酒》吗」会被误判为不支持）。
+  const placeMatch = PLACE_QUESTION.exec(query);
+  if (placeMatch) {
+    const person = collapseWhitespace(placeMatch[1].replace(PERSON_LEADING_NOISE, "").replace(PERSON_TRAILING_NOISE, ""));
+    const place = collapseWhitespace(placeMatch[2]);
+    const book = /《([^《》]{1,60})》/u.exec(query);
+    const work = book ? collapseWhitespace(book[1]) : null;
+    if (person && person.length >= 2 && person.length <= 24 && place && place.length <= 16 && !VERB_PATTERN.test(person) && !/《|》|在|的|人|什/.test(place)) {
+      return { person, work, place };
+    }
+  }
+
   let work = null;
   let rest = query;
   const book = /《([^《》]{1,60})》/u.exec(query);
@@ -82,7 +98,7 @@ export function extractSlots(rawQuery) {
   work = collapseWhitespace((work ?? "").replace(WORK_TAIL_NOISE, "").replace(/[?？。！!，,]/g, ""));
   if (!person || !work || person.length > 24 || work.length > 60) return null;
   if (/《|》/.test(person) || VERB_PATTERN.test(person) || VERB_PATTERN.test(work)) return null;
-  return { person, work };
+  return { person, work, place: null };
 }
 
 /**
@@ -125,6 +141,57 @@ export function resolveWorkFromFind(findResult, workKeyword) {
   const title = collapseWhitespace(chosen?.Title?.Content);
   // 标题命中时用用户确认词做展示 label；否则退回真实标题。
   return { id, title, label: matchedByTitle ? keyword : (title || keyword) };
+}
+
+/** 展示用短标题：「鼓吹曲辞 将进酒」→「将进酒」；组诗「其一」不单独成题。 */
+export function shortDisplayTitle(title) {
+  const text = collapseWhitespace(title);
+  if (!text) return null;
+  if (text.includes(" ")) {
+    const last = text.split(/\s+/).at(-1);
+    if (last.length >= 2 && !/^[其第][一二三四五六七八九十百]+$/.test(last)) return last;
+  }
+  return text.length <= 24 ? text : `${text.slice(0, 23)}…`;
+}
+
+/** AuthorPlace 形如 "CN410185,嵩山"；去掉行政区划码后做包含匹配。 */
+export function placeInAuthorPlace(rawPlace, place) {
+  const normalized = collapseWhitespace(String(rawPlace ?? "").replace(/CN\d+/g, "").replace(/[\s,，、;；]/g, ""));
+  const target = collapseWhitespace(place);
+  return Boolean(target) && normalized.includes(target);
+}
+
+/** 从 Writing 条目解析作品；keyword 命中标题时优先用用户确认词做 label。 */
+export function workFromWriting(writing, keyword) {
+  const id = Number(writing?.Id);
+  if (!Number.isInteger(id)) return null;
+  const title = collapseWhitespace(writing?.Title?.Content);
+  if (!title) return null;
+  const wanted = collapseWhitespace(keyword);
+  return { id, title, label: wanted && title.includes(wanted) ? wanted : shortDisplayTitle(title) };
+}
+
+/**
+ * 取作者作品页（仅第 0 页，20 首）。唯一作者时 Writing/Find 直接附带；
+ * 否则带 dynasty（漂移分组名）重查 Find 收窄到 AuthorWritings——
+ * 注意 OpenAPI 所写的 /api/Writing/{dynasty}/{author}/{authorId} 路径
+ * 实测返回 CSV 而非 JSON（2026-08-22 审计），不可用。
+ */
+async function fetchAuthorWritings({ fetchImpl, base, author, authorFind, timeoutMs, findUrl }) {
+  const initial = Array.isArray(authorFind?.AuthorWritings?.Writings)
+    ? { writings: authorFind.AuthorWritings.Writings, totalCount: Number(authorFind.AuthorWritings.WritingCount) || null }
+    : null;
+  if (initial) return initial;
+  if (!author?.dynasty || !author?.name) return null;
+  const url = findUrl ?? `${base}/api/Writing/Find`;
+  try {
+    const payload = await callUpstream({ fetchImpl, url, method: "POST", body: { author: author.name, dynasty: author.dynasty, exactlyMatch: true, pageNo: 0 }, timeoutMs });
+    return Array.isArray(payload?.AuthorWritings?.Writings)
+      ? { writings: payload.AuthorWritings.Writings, totalCount: Number(payload.AuthorWritings.WritingCount) || null }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 从 Writing/Find 的 AuthorPlace（"CN410185,嵩山"）与 AuthorDate（"736年"）提取有界时空索引。 */
@@ -323,7 +390,7 @@ export function createSeekHandler({
     if (!slots) {
       return gap("当前 gateway 只支持「某人物写过某作品」式的问句，例如「李白写过《将进酒》吗」。");
     }
-    const cacheKey = `${slots.person}\u0000${slots.work}`;
+    const cacheKey = `${slots.person}\u0000${slots.work ?? ""}\u0000${slots.place ?? ""}`;
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
@@ -357,22 +424,52 @@ export function createSeekHandler({
     }
     const author = authorResolution.author;
 
-    // 第 2 步：作品检索（key + author 组合的匹配是有效的）。
-    let workFind;
-    try {
-      workFind = await callUpstream({ fetchImpl, url: findUrl, method: "POST", body: { key: slots.work, author: author.name, exactlyMatch: true, pageNo: 0 }, timeoutMs: callBudget() });
-    } catch (error) {
-      // 同上：404 表示明确无匹配作品。
-      if (error instanceof Error && error.status === 404) {
-        const result = gap(`没有找到${author.name}名下与「${slots.work}」对应的作品。`);
+    // 第 2 步：作品定位——地点问句先按 key=地点 搜标题/内容，再兜底 AuthorPlace 过滤；其余按 key+author 检索。
+    let work = null;
+    let workFind = null;
+    if (slots.place) {
+      let located = null;
+      try {
+        workFind = await callUpstream({ fetchImpl, url: findUrl, method: "POST", body: { key: slots.place, author: author.name, exactlyMatch: true, pageNo: 0 }, timeoutMs: callBudget() });
+        located = (Array.isArray(workFind?.Writings) ? workFind.Writings : []).find((candidate) => collapseWhitespace(candidate?.Title?.Content).includes(slots.place) && Number.isInteger(Number(candidate?.Id))) ?? null;
+      } catch (error) {
+        if (error instanceof Error && error.status === 404) {
+          workFind = null;
+          located = null;
+        } else {
+          return upstreamFailure(error);
+        }
+      }
+      if (!located) {
+        const worksPage = await fetchAuthorWritings({ fetchImpl, base, author, authorFind, timeoutMs: callBudget(), findUrl });
+        const placeMatches = (worksPage?.writings ?? []).filter((candidate) => placeInAuthorPlace(candidate?.AuthorPlace, slots.place) && Number.isInteger(Number(candidate?.Id)));
+        located = (slots.work ? placeMatches.find((candidate) => collapseWhitespace(candidate?.Title?.Content).includes(slots.work)) : undefined) ?? placeMatches[0] ?? null;
+        if (located) workFind = { Writings: [located] };
+      } else {
+        workFind = { Writings: [located] };
+      }
+      if (!located) {
+        const result = gap(`没有找到${author.name}在「${slots.place}」留下笔墨的作品记录。`);
         cache.set(cacheKey, result, { negative: true });
         return result;
       }
-      return upstreamFailure(error);
+      work = workFromWriting(located, slots.work);
+    } else {
+      try {
+        workFind = await callUpstream({ fetchImpl, url: findUrl, method: "POST", body: { key: slots.work, author: author.name, exactlyMatch: true, pageNo: 0 }, timeoutMs: callBudget() });
+      } catch (error) {
+        // 同上：404 表示明确无匹配作品。
+        if (error instanceof Error && error.status === 404) {
+          const result = gap(`没有找到${author.name}名下与「${slots.work}」对应的作品。`);
+          cache.set(cacheKey, result, { negative: true });
+          return result;
+        }
+        return upstreamFailure(error);
+      }
+      work = resolveWorkFromFind(workFind, slots.work);
     }
-    const work = resolveWorkFromFind(workFind, slots.work);
     if (!work) {
-      const result = gap(`没有找到${author.name}名下与「${slots.work}」对应的作品。`);
+      const result = gap(`没有找到${author.name}名下与「${slots.work ?? slots.place}」对应的作品。`);
       cache.set(cacheKey, result, { negative: true });
       return result;
     }
@@ -481,10 +578,107 @@ export function createAnchorHandler({
   };
 }
 
+/**
+ * 作品列表端点：{ person } → 漂移过滤 → 作者作品页（第 0 页）→ 有界候选。
+ * 优先返回带创作时间/地点的作品（可支撑后续时空索引），确定性排序，不经过模型。
+ */
+export function createWorksHandler({
+  authToken,
+  upstreamBase = process.env.SOUYUN_API_BASE || DEFAULT_UPSTREAM_BASE,
+  fetchImpl = fetch,
+  perCallTimeoutMs = 2_500,
+  totalBudgetMs = 7_000,
+  cache = createBoundedCache(),
+} = {}) {
+  if (!authToken) throw new Error("SOUYUN_GATEWAY_AUTH_TOKEN 未配置；gateway 拒绝在无认证时启动。");
+  const base = String(upstreamBase).replace(/\/+$/, "");
+  const findUrl = `${base}/api/Writing/Find`;
+
+  return async function handleWorks(requestBody) {
+    const parsed = parsePersonInput(requestBody?.person);
+    const name = parsed?.person;
+    if (!name || !/^[\p{Script=Han}·]{2,12}$/u.test(name)) {
+      return { status: 400, body: { error: "invalid_person" } };
+    }
+    const cacheKey = `works\u0000${name}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    const deadline = Date.now() + totalBudgetMs;
+    const callBudget = () => Math.min(perCallTimeoutMs, Math.max(deadline - Date.now(), 1));
+
+    let authorFind;
+    try {
+      authorFind = await callUpstream({ fetchImpl, url: findUrl, method: "POST", body: { author: name, exactlyMatch: true, pageNo: 0 }, timeoutMs: callBudget() });
+    } catch (error) {
+      if (error instanceof Error && error.status === 404) {
+        const result = { status: 200, body: { kind: "evidence_gap", reason: `诗文库没有与「${name}」精确同名的作者记录。` } };
+        cache.set(cacheKey, result, { negative: true });
+        return result;
+      }
+      return upstreamFailure(error);
+    }
+    const resolution = resolveAuthorFromFind(authorFind, name);
+    if (resolution.kind === "none") {
+      const result = { status: 200, body: { kind: "evidence_gap", reason: `诗文库没有与「${name}」精确同名的作者记录。` } };
+      cache.set(cacheKey, result, { negative: true });
+      return result;
+    }
+    if (resolution.kind === "ambiguous") {
+      const result = {
+        status: 200,
+        body: {
+          kind: "person_ambiguous",
+          candidates: resolution.candidates.slice(0, 4).map((candidate) => ({
+            name: `${candidate.dynasty ?? "朝代不详"}·${candidate.name}`,
+            dynasty: candidate.dynasty,
+            life: candidate.life ?? null,
+          })),
+        },
+      };
+      cache.set(cacheKey, result, { negative: true });
+      return result;
+    }
+    const author = resolution.author;
+    const worksPage = await fetchAuthorWritings({ fetchImpl, base, author, authorFind, timeoutMs: callBudget(), findUrl });
+    const valid = (worksPage?.writings ?? [])
+      .map((writing) => {
+        const parsedWork = workFromWriting(writing, null);
+        return parsedWork ? {
+          id: parsedWork.id,
+          title: parsedWork.label,
+          date: collapseWhitespace(writing?.AuthorDate) || null,
+          place: collapseWhitespace(String(writing?.AuthorPlace ?? "").replace(/CN\d+/g, "").replace(/^[,，、\s]+|[,，、\s]+$/g, "")) || null,
+        } : null;
+      })
+      .filter(Boolean);
+    if (valid.length === 0) {
+      const result = { status: 200, body: { kind: "evidence_gap", reason: `诗文库暂无「${author.name}」可展示的作品列表。` } };
+      cache.set(cacheKey, result, { negative: true });
+      return result;
+    }
+    const preferred = valid.filter((work) => work.date || work.place);
+    const chosen = (preferred.length > 0 ? preferred : valid).slice(0, 3);
+    const result = {
+      status: 200,
+      body: {
+        kind: "works",
+        name: author.name,
+        dynasty: author.dynasty,
+        totalCount: worksPage?.totalCount ?? valid.length,
+        works: chosen,
+      },
+    };
+    cache.set(cacheKey, result);
+    return result;
+  };
+}
+
 export function createSouyunGatewayService(options = {}) {
   const { authToken = process.env.SOUYUN_GATEWAY_AUTH_TOKEN } = options;
   const handleSeek = createSeekHandler({ ...options, authToken });
   const handleAnchor = createAnchorHandler({ ...options, authToken });
+  const handleWorks = createWorksHandler({ ...options, authToken });
   return createServer(async (request, response) => {
     const send = (status, payload) => {
       response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -494,7 +688,8 @@ export function createSouyunGatewayService(options = {}) {
       send(200, { status: "ok" });
       return;
     }
-    if (request.method !== "POST" || !["/seek", "/anchor"].includes((request.url ?? "").split("?")[0])) {
+    const route = (request.url ?? "").split("?")[0];
+    if (request.method !== "POST" || !["/seek", "/anchor", "/works"].includes(route)) {
       send(404, { error: "not_found" });
       return;
     }
@@ -504,7 +699,7 @@ export function createSouyunGatewayService(options = {}) {
     }
     try {
       const body = await readJsonBody(request, MAX_REQUEST_BODY_BYTES);
-      const result = (request.url ?? "").split("?")[0] === "/anchor" ? await handleAnchor(body) : await handleSeek(body);
+      const result = route === "/anchor" ? await handleAnchor(body) : route === "/works" ? await handleWorks(body) : await handleSeek(body);
       send(result.status, result.body);
     } catch {
       send(400, { error: "bad_request" });
