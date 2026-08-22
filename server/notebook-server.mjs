@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
-import { createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
+import { createAnchorResolver, createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
 import { runFixtureSeek } from "./fixture-seek.mjs";
+import { resolveNotebookAnchor, runNarrative } from "./journey-agent.mjs";
 import { runSeek } from "./run-seek.mjs";
 import { createSouyunSnapshotRetriever } from "./souyun-snapshot-retriever.mjs";
 import { transcribeInk } from "./transcription-adapter.mjs";
@@ -36,9 +37,18 @@ export function seekNotebook(input) {
     : runSeek({ ...input, retrieve: process.env.CNKGRAPH_PROVIDER === "souyun-snapshot" ? createSouyunSnapshotRetriever() : createCnkgraphGatewayRetriever() });
 }
 
-export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekNotebook } = {}) {
+/** 起笔人物名（无 journey 上下文）→ 人物锚点解析；其余走寻迹。 */
+export async function seekOrAnchorNotebook(input, resolveAnchor = createAnchorResolver(), seek = seekNotebook) {
+  if (input?.journey === undefined || input?.journey === null) {
+    const anchored = await resolveNotebookAnchor({ transcription: input?.transcription, resolveAnchor });
+    if (anchored) return anchored;
+  }
+  return seek(input);
+}
+
+export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekOrAnchorNotebook, narrative = runNarrative } = {}) {
   return async (request, response, next) => {
-    if (request.method !== "POST" || !["/api/transcribe", "/api/seek"].includes(request.url)) {
+    if (request.method !== "POST" || !["/api/transcribe", "/api/seek", "/api/narrative"].includes(request.url)) {
       if (next) {
         next();
         return;
@@ -50,7 +60,9 @@ export function createNotebookApiHandler({ transcribe = transcribeInk, seek = se
       const body = await readJson(request);
       const result = request.url === "/api/transcribe"
         ? await transcribe({ image: body.image })
-        : await seek({ transcription: body.transcription, image: body.image });
+        : request.url === "/api/narrative"
+          ? await narrative({ journey: body.journey, evidence: body.evidence })
+          : await seek({ transcription: body.transcription, image: body.image, journey: body.journey });
       writeJson(response, 200, result);
     } catch (error) {
       const status = error instanceof Error && error.message === "body_too_large" ? 413 : 400;
