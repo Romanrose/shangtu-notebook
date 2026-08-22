@@ -1,5 +1,5 @@
-import { createAnchorResolver, createCnkgraphGatewayRetriever } from "./cnkgraph-gateway.mjs";
-import { normalizeJourneyQuery, resolveNotebookAnchor, runNarrative, isPersonName } from "./journey-agent.mjs";
+import { createAnchorResolver, createCnkgraphGatewayRetriever, createWorksResolver } from "./cnkgraph-gateway.mjs";
+import { isOpenWorksQuestion, normalizeJourneyQuery, resolveNotebookAnchor, resolveWorksOutcome, runNarrative, isPersonName } from "./journey-agent.mjs";
 import { seekOrAnchorNotebook } from "./notebook-server.mjs";
 import { createSeekHandler, resolvePersonAnchor } from "./souyun-gateway-service.mjs";
 
@@ -229,4 +229,49 @@ const allSourcesOutcome = normalizeSeekOutcome({
 });
 assert(allSourcesOutcome.kind === "evidence" && allSourcesOutcome.source.length === 3, "全量来源提案应显示全部来源");
 
-console.log("Journey agent contract verified: 人物锚点（含朝代收窄与同名候选）、旅程问句归一化、时空索引透传、来源子集核验、Pi 容错直出与未配置降级、联想边界、localhost 豁免均通过。");
+// 13. 开放式作品问句：识别 + 作品候选 outcome + runSeek 拦截。
+assert(isOpenWorksQuestion("他写过什么", journey) === true, "旅程锚点下的开放问句没有被识别");
+assert(isOpenWorksQuestion("李白写过什么", null) === true, "无旅程的「人物+写过什么」没有被识别");
+assert(isOpenWorksQuestion("李白有哪些作品", null) === true, "「有哪些作品」没有被识别");
+assert(isOpenWorksQuestion("代表作", journey) === true, "「代表作」没有被识别");
+assert(isOpenWorksQuestion("他写过《将进酒》吗", journey) === false, "带书名的具体问句不应判为开放问句");
+assert(isOpenWorksQuestion("今天天气怎么样", journey) === false, "无关问句不应判为开放问句");
+const worksFetch = fakeGateway({
+  evidence: gatewayEvidence,
+  anchorPayload: personAnchorPayload,
+});
+worksFetch.routeWorks = async (url, options) => {
+  if (String(url).endsWith("/works")) {
+    worksFetch.calls.push({ url: String(url), options, body: options?.body ? JSON.parse(options.body) : null });
+    return { ok: true, status: 200, json: async () => ({ kind: "works", name: "李白", totalCount: 1111, works: [{ id: 26453, title: "将进酒", date: "736年", place: "嵩山" }, { id: 7, title: "静夜思", date: null, place: null }] }) };
+  }
+  return null;
+};
+const worksResolver = createWorksResolver({ endpoint: GATEWAY, authToken: "t", fetchImpl: async (url, options) => (await worksFetch.routeWorks(url, options)) ?? worksFetch(url, options) });
+const worksWithJourney = await resolveWorksOutcome({ transcription: "他写过什么", journey, worksResolver });
+assert(withJourneyStatus(worksWithJourney) && worksWithJourney.outcome.kind === "ambiguous" && worksWithJourney.outcome.candidates[0] === "将进酒", "有锚点的开放问句应返回裸书名候选");
+assert(worksWithJourney.outcome.clarification.includes("1111"), "开放问句澄清语应包含真实作品总数");
+const worksNoJourney = await resolveWorksOutcome({ transcription: "李白写过什么", journey: null, worksResolver });
+assert(worksNoJourney.outcome.kind === "ambiguous" && worksNoJourney.outcome.candidates[0] === "李白写过《将进酒》吗", "无锚点的开放问句应返回完整问句候选（点选后可独立寻迹）");
+const worksGapResolver = createWorksResolver({ endpoint: GATEWAY, authToken: "t", fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ kind: "evidence_gap", reason: "诗文库没有与「无名氏」精确同名的作者记录。" }) }) });
+const worksGap = await resolveWorksOutcome({ transcription: "无名氏写过什么", journey: null, worksResolver: worksGapResolver });
+assert(worksGap.outcome.kind === "gap" && worksGap.outcome.gap.includes("无名氏"), "无档案人物的开放问句应返回证据缺口");
+const unconfiguredWorks = await resolveWorksOutcome({ transcription: "他写过什么", journey, worksResolver: createWorksResolver({ endpoint: undefined, authToken: undefined }) });
+assert(unconfiguredWorks.status === "graph_unconfigured", "gateway 未配置时开放问句必须显式降级");
+const intercepted = await runSeek({
+  transcription: "他写过什么", journey,
+  createSession: async () => { throw new Error("开放问句不应触发 Pi 会话"); },
+  retrieve: createCnkgraphGatewayRetriever({ endpoint: GATEWAY, authToken: "t", fetchImpl: worksFetch }),
+  worksResolver,
+});
+assert(intercepted.status === "ok" && intercepted.outcome.kind === "ambiguous", "runSeek 没有在图谱寻迹前拦截开放问句");
+
+// 14. 地点线归一化：代词问句与裸地点词 → 「{人物}在{地点}写过什么」。
+textEqual(normalizeJourneyQuery("他在嵩山写过什么", { anchor: "李白", route: "space" }), "李白在嵩山写过什么", "地点代词问句应替换人物与地点");
+textEqual(normalizeJourneyQuery("嵩山", { anchor: "李白", route: "space" }), "李白在嵩山写过什么", "地点线裸地点应补全人物与问式");
+textEqual(normalizeJourneyQuery("在黄州留下过什么", { anchor: "苏轼", route: "space" }), "苏轼在黄州写过什么", "「留下过什么」地点问句应归一");
+assert(normalizeJourneyQuery("他在此地游历", { anchor: "李白", route: "space" }) === "他在此地游历", "未识别的「在」结构不应强行改写");
+
+function withJourneyStatus(result) { return result.status === "ok"; }
+
+console.log("Journey agent contract verified: 人物锚点（含朝代收窄与同名候选）、旅程问句归一化（作品与地点）、开放问句作品候选、时空索引透传、来源子集核验、Pi 容错直出与未配置降级、联想边界、localhost 豁免均通过。");

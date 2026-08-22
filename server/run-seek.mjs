@@ -1,5 +1,6 @@
 import { createPiNotebookSession, notebookSystemPrompt } from "./notebook-agent.mjs";
-import { normalizeJourneyQuery } from "./journey-agent.mjs";
+import { createWorksResolver } from "./cnkgraph-gateway.mjs";
+import { isOpenWorksQuestion, normalizeJourneyQuery, resolveWorksOutcome } from "./journey-agent.mjs";
 import { normalizeSeekOutcome } from "./seek-outcome.mjs";
 
 function textFromLastAssistant(session) {
@@ -48,9 +49,14 @@ function deterministicProposal(graph) {
  * only the user's confirmed transcription plus bounded graph evidence, so a
  * text-only tool-calling model can run without receiving the original ink.
  */
-export async function runSeek({ transcription, image, journey, createSession = createPiNotebookSession, retrieve = retrieveUnconfigured }) {
+export async function runSeek({ transcription, image, journey, createSession = createPiNotebookSession, retrieve = retrieveUnconfigured, worksResolver = createWorksResolver() }) {
   if (!transcription?.trim()) return { status: "needs_transcription" };
   if (retrieve.isConfigured === false) return { status: "graph_unconfigured" };
+  // 开放式作品问句：真实作品列表 → 候选点选，先于图谱寻迹（确定性，不经模型）。
+  if (isOpenWorksQuestion(transcription, journey)) {
+    const worksResult = await resolveWorksOutcome({ transcription, journey, worksResolver });
+    if (worksResult) return worksResult;
+  }
   const requestRetrieval = cacheRequestRetrieval(retrieve);
   // 旅程感知：锚点人物已知时把代词/裸作品名归一成 gateway 可解析的问句。
   const query = normalizeJourneyQuery(transcription, journey);
