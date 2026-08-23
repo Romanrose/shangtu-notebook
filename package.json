@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "check:agent": "node server/check-agent.mjs",
+    "check:deployment": "node server/check-deployment-proxy.mjs",
     "check:journey-agent": "node server/check-journey-agent.mjs",
     "check:saber-spike": "node spikes/saber-pi/check-fixture.mjs",
     "check:saber-spike-client": "node spikes/saber-pi/check-client.mjs",

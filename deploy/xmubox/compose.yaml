@@ -1,0 +1,27 @@
+services:
+  notebook-api:
+    build:
+      context: ../..
+    image: shangtu-notebook-api:latest
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - ../../.env.production
+    environment:
+      NODE_ENV: production
+      PORT: "4174"
+      NOTEBOOK_HOST: 127.0.0.1
+      CNKGRAPH_GATEWAY_ENDPOINT: https://xmubox.tail869cf0.ts.net:8451/seek
+    command: ["node", "server/notebook-server.mjs"]
+
+  souyun-gateway:
+    image: shangtu-notebook-api:latest
+    network_mode: host
+    restart: unless-stopped
+    env_file:
+      - ../../.env.production
+    environment:
+      NODE_ENV: production
+      SOUYUN_GATEWAY_PORT: "8787"
+      SOUYUN_GATEWAY_HOST: 127.0.0.1
+    command: ["node", "server/souyun-gateway-service.mjs"]

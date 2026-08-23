@@ -46,14 +46,22 @@ export async function seekOrAnchorNotebook(input, resolveAnchor = createAnchorRe
   return seek(input);
 }
 
-export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekOrAnchorNotebook, narrative = runNarrative } = {}) {
+export function createNotebookApiHandler({ transcribe = transcribeInk, seek = seekOrAnchorNotebook, narrative = runNarrative, authToken = process.env.NOTEBOOK_API_AUTH_TOKEN } = {}) {
   return async (request, response, next) => {
+    if (request.method === "GET" && request.url === "/healthz") {
+      writeJson(response, 200, { status: "ok" });
+      return;
+    }
     if (request.method !== "POST" || !["/api/transcribe", "/api/seek", "/api/narrative"].includes(request.url)) {
       if (next) {
         next();
         return;
       }
       writeJson(response, 404, { status: "not_found" });
+      return;
+    }
+    if (authToken && request.headers.authorization !== `Bearer ${authToken}`) {
+      writeJson(response, 401, { status: "unauthorized" });
       return;
     }
     try {
@@ -77,5 +85,6 @@ export function createNotebookServer(options) {
 
 if (import.meta.main) {
   const port = Number(process.env.PORT ?? 4174);
-  createNotebookServer().listen(port, () => console.log(`Notebook API listening on :${port}`));
+  const host = process.env.NOTEBOOK_HOST ?? "127.0.0.1";
+  createNotebookServer().listen(port, host, () => console.log(`Notebook API listening on ${host}:${port}`));
 }

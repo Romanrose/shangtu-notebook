@@ -392,6 +392,17 @@ await withServer({
   const forbidden = await fetch(`${origin}/api/anything`, { method: "POST" });
   if (forbidden.status !== 404) throw new Error("API 暴露了白名单之外的路径。");
 });
+await withServer({
+  authToken: "server-only-notebook-token",
+  transcribe: async () => ({ status: "ok", transcription: { text: "李白", candidates: [] }, providerStatus: "test" }),
+}, async (origin) => {
+  const health = await fetch(`${origin}/healthz`);
+  if (health.status !== 200 || (await health.json()).status !== "ok") throw new Error("Notebook API 健康检查不可用。");
+  const unauthorized = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: tinyInk }) });
+  if (unauthorized.status !== 401 || (await unauthorized.json()).status !== "unauthorized") throw new Error("Notebook API 没有拒绝未认证请求。");
+  const authorized = await fetch(`${origin}/api/transcribe`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer server-only-notebook-token" }, body: JSON.stringify({ image: tinyInk }) });
+  if (authorized.status !== 200 || (await authorized.json()).transcription?.text !== "李白") throw new Error("Notebook API 拒绝了服务端认证请求。");
+});
 const previousFixtureMode = process.env.NOTEBOOK_FIXTURE_MODE;
 process.env.NOTEBOOK_FIXTURE_MODE = "1";
 try {

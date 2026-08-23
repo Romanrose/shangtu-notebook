@@ -710,9 +710,10 @@ export function createSouyunGatewayService(options = {}) {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   const port = Number(process.env.SOUYUN_GATEWAY_PORT || DEFAULT_PORT);
+  const host = process.env.SOUYUN_GATEWAY_HOST || "127.0.0.1";
   const service = createSouyunGatewayService();
-  service.listen(port, () => {
-    console.log(`Souyun CNKGraph gateway listening on http://localhost:${port} (部署时必须置于 HTTPS 之后)`);
+  service.listen(port, host, () => {
+    console.log(`Souyun CNKGraph gateway listening on http://${host}:${port} (部署时必须置于 HTTPS 之后)`);
     console.log(`Upstream: ${process.env.SOUYUN_API_BASE || DEFAULT_UPSTREAM_BASE}`);
   });
 }
