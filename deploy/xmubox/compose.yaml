@@ -15,6 +15,8 @@ services:
       NOTEBOOK_HOST: 127.0.0.1
       VISION_MODEL_PROVIDER: deepseek-vision
       VISION_MODEL_ID: deepseek-v4-flash-vision-exp
+      SABER_PI_TRANSCRIPTION_PROVIDER: deepseek-vision
+      SABER_PI_TRANSCRIPTION_MODEL_ID: deepseek-v4-flash-vision-exp
       CNKGRAPH_GATEWAY_ENDPOINT: https://xmubox.tail869cf0.ts.net:8451/seek
     command: ["node", "server/notebook-server.mjs"]
 
