@@ -11,6 +11,8 @@ services:
       NODE_ENV: production
       PORT: "4174"
       NOTEBOOK_HOST: 127.0.0.1
+      VISION_MODEL_PROVIDER: deepseek-vision
+      VISION_MODEL_ID: deepseek-v4-flash-vision-exp
       CNKGRAPH_GATEWAY_ENDPOINT: https://xmubox.tail869cf0.ts.net:8451/seek
     command: ["node", "server/notebook-server.mjs"]
 
