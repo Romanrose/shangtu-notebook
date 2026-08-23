@@ -7,3 +7,4 @@ data/souyun-snapshots/
 coverage/
 .DS_Store
 *.log
+.vercel
