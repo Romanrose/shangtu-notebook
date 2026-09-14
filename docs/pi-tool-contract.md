@@ -17,7 +17,7 @@ Pi 初始化显式禁用内建 coding tools、自动发现的扩展/skills/项�
 
 实验分支可选的 `vlm-openai-compatible` provider 只在服务端读取 `VISION_VLM_ENDPOINT`、`VISION_VLM_API_KEY` 和 `VISION_MODEL_ID`，向兼容 Chat Completions 的视觉接口发送当前 PNG；密钥不会进入浏览器、日志或转写响应。模型结果只作为可编辑机器转写，不能直接触发寻迹或写入事实旁批。
 
-`deepseek-vision` 是针对 DeepSeek 官方 `deepseek-v4-flash-vision-exp` 的显式 OCR provider：固定调用官方 Chat Completions 端点，并只读取服务端 `DEEPSEEK_API_KEY` 与可选 `VISION_MODEL_ID`。它复用同一份当前裁剪 PNG 与统一转写合同，不复制密钥到通用 VLM 配置，也不会把图像或密钥交给 Pi、浏览器或日志。
+`deepseek-vision` 是针对 DeepSeek 官方 `deepseek-v4-flash-vision-exp` 的显式 OCR provider：固定调用官方 Chat Completions 端点，并只读取服务端 `DEEPSEEK_API_KEY` 与可选 `VISION_MODEL_ID`。转写请求显式关闭思考模式并要求 JSON 输出，避免短 OCR 结果被默认推理内容耗尽输出额度；模型返回仍须经过统一转写合同收敛。它复用同一份当前裁剪 PNG，不复制密钥到通用 VLM 配置，也不会把图像或密钥交给 Pi、浏览器或日志。
 
 实验分支也支持服务端自托管的 `paddleocr-vl` provider；它只向配置的 `PADDLEOCR_VL_ENDPOINT`（官方完整 pipeline 的 `/layout-parsing`）发送当前 PNG，响应中的 `parsing_res_list[].block_content` 只作为可编辑机器转写。该 provider 不把 PaddleOCR-VL 的 Markdown、布局事实或视觉输出直接交给 Pi。
 

@@ -38,6 +38,8 @@ export async function invokeOpenAiCompatibleVlm({
   modelId,
   endpoint = process.env.VISION_VLM_ENDPOINT,
   apiKey = process.env.VISION_VLM_API_KEY,
+  disableThinking = false,
+  requireJson = false,
   fetchImpl = fetch,
   signal,
 }) {
@@ -53,6 +55,8 @@ export async function invokeOpenAiCompatibleVlm({
       model: modelId,
       temperature: 0,
       max_tokens: 256,
+      ...(disableThinking ? { thinking: { type: "disabled" } } : {}),
+      ...(requireJson ? { response_format: { type: "json_object" } } : {}),
       messages: [{
         role: "user",
         content: [

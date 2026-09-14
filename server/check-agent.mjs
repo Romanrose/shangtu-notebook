@@ -248,7 +248,7 @@ const configuredVlm = await transcribeInk({ image: tinyInk, provider: "vlm-opena
 if (configuredVlm.status !== "ok" || configuredVlm.providerStatus !== "ready" || configuredVlm.transcription?.text !== "李白是谁？") throw new Error("VLM 没有经过统一转写适配器。");
 const configuredDeepseekVision = await transcribeInk({ image: tinyInk, provider: "deepseek-vision", deepseekApiKey: "server-only-deepseek-token", fetchImpl: async (url, options) => {
   const body = JSON.parse(options.body);
-  if (url !== DEEPSEEK_VISION_ENDPOINT || options.headers.Authorization !== "Bearer server-only-deepseek-token" || body.model !== DEEPSEEK_VISION_MODEL_ID || body.messages?.[0]?.content?.[1]?.image_url?.url !== tinyInk.data) throw new Error("DeepSeek Vision 请求合同或凭据边界错误。");
+  if (url !== DEEPSEEK_VISION_ENDPOINT || options.headers.Authorization !== "Bearer server-only-deepseek-token" || body.model !== DEEPSEEK_VISION_MODEL_ID || body.thinking?.type !== "disabled" || body.response_format?.type !== "json_object" || body.messages?.[0]?.content?.[1]?.image_url?.url !== tinyInk.data) throw new Error("DeepSeek Vision 请求合同、非思考 JSON 模式或凭据边界错误。");
   return { ok: true, json: async () => vlmResponse };
 } });
 if (configuredDeepseekVision.status !== "ok" || configuredDeepseekVision.provider !== "deepseek-vision" || configuredDeepseekVision.transcription?.text !== "李白是谁？") throw new Error("DeepSeek Vision 没有经过统一转写适配器。");

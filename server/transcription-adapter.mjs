@@ -88,7 +88,7 @@ export async function transcribeInk({ image, provider = process.env.VISION_MODEL
     return runTranscriptionProvider({ invoke: ({ signal }) => invokeTesseract({ image, command: tesseractBin, language: tesseractLanguage, tessdataPrefix, psm: tesseractPsm, signal, spawnImpl }) }).then((result) => ({ ...result, provider: label }));
   }
   if (provider === "deepseek-vision" && deepseekApiKey) {
-    return runTranscriptionProvider({ invoke: ({ signal }) => invokeOpenAiCompatibleVlm({ image, modelId: modelId || DEEPSEEK_VISION_MODEL_ID, endpoint: DEEPSEEK_VISION_ENDPOINT, apiKey: deepseekApiKey, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
+    return runTranscriptionProvider({ invoke: ({ signal }) => invokeOpenAiCompatibleVlm({ image, modelId: modelId || DEEPSEEK_VISION_MODEL_ID, endpoint: DEEPSEEK_VISION_ENDPOINT, apiKey: deepseekApiKey, disableThinking: true, requireJson: true, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
   }
   if (provider === "vlm-openai-compatible" && vlmEndpoint && vlmApiKey) {
     return runTranscriptionProvider({ invoke: ({ signal }) => invokeOpenAiCompatibleVlm({ image, modelId, endpoint: vlmEndpoint, apiKey: vlmApiKey, signal, fetchImpl }) }).then((result) => ({ ...result, provider: label }));
